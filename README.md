@@ -1,2 +1,3 @@
-# MIA_1S2025_P1_202302549
-Primer proyecto de Manejo e implementacion de archivos, simulacion de un disco duro
+# Clase 3
+
+Explicación del comando **mkdisk**, consigo explicación de como funcionan las estructuras en Golang y como escribirlas en un archivo binario.
