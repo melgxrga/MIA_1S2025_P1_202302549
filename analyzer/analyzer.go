@@ -22,12 +22,12 @@ func Analyzer(input string) (interface{}, error) {
 	case "mkdisk":
 		// Llama a la función ParseMkdisk del paquete commands con los argumentos restantes
 		return commands.ParseMkdisk(tokens[1:])
-	case "rmdisk":
-		// Elimina el disco
-		return commands.RemoveDisk(tokens[1:])
 	case "fdisk":
-		// Crea una partición en el disco existente
-		return commands.ParseMkpart(tokens[1:])
+		// Llama a la función CommandFdisk del paquete commands con los argumentos restantes
+		return commands.ParseFdisk(tokens[1:])
+	case "mount":
+		// Llama a la función CommandMount del paquete commands con los argumentos restantes
+		return commands.ParseMount(tokens[1:])
 	default:
 		// Si el comando no es reconocido, devuelve un error
 		return nil, fmt.Errorf("comando desconocido: %s", tokens[0])

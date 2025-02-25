@@ -140,9 +140,6 @@ func commandMkdisk(mkdisk *MKDISK) error {
 }
 
 func createDisk(mkdisk *MKDISK, sizeBytes int) error {
-	// Guardar el tamaño original para mostrarlo luego
-	originalSize := sizeBytes
-
 	// Crear las carpetas necesarias
 	err := os.MkdirAll(filepath.Dir(mkdisk.path), os.ModePerm)
 	if err != nil {
@@ -170,23 +167,10 @@ func createDisk(mkdisk *MKDISK, sizeBytes int) error {
 		}
 		sizeBytes -= writeSize // Resta el tamaño escrito del tamaño total
 	}
-
-	// Mensajes adicionales de depuración
-	fmt.Println("********** Inicio de impresión de datos **********")
-	// Mostrar mensaje con los datos del disco creado
-	fmt.Println("Disco creado exitosamente con los siguientes datos:")
-	fmt.Println("Ruta del disco:", mkdisk.path)
-	fmt.Println("Tamaño del disco (bytes):", originalSize)
-	fmt.Println("Unidad de medida:", mkdisk.unit)
-	fmt.Println("*********** Fin de impresión de datos ***********")
 	return nil
 }
 
 func createMBR(mkdisk *MKDISK, sizeBytes int) error {
-	// Si no se especifica un valor, se asigna el valor por defecto "FF"
-	if mkdisk.fit == "" {
-		mkdisk.fit = "FF"
-	}
 	// Seleccionar el tipo de ajuste
 	var fitByte byte
 	switch mkdisk.fit {
@@ -208,6 +192,8 @@ func createMBR(mkdisk *MKDISK, sizeBytes int) error {
 		Mbr_disk_signature: rand.Int31(),
 		Mbr_disk_fit:       [1]byte{fitByte},
 		Mbr_partitions: [4]structures.PARTITION{
+			// Inicializó todos los char en N y los enteros en -1 para que se puedan apreciar en el archivo binario.
+
 			{Part_status: [1]byte{'N'}, Part_type: [1]byte{'N'}, Part_fit: [1]byte{'N'}, Part_start: -1, Part_size: -1, Part_name: [16]byte{'N'}, Part_correlative: -1, Part_id: [4]byte{'N'}},
 			{Part_status: [1]byte{'N'}, Part_type: [1]byte{'N'}, Part_fit: [1]byte{'N'}, Part_start: -1, Part_size: -1, Part_name: [16]byte{'N'}, Part_correlative: -1, Part_id: [4]byte{'N'}},
 			{Part_status: [1]byte{'N'}, Part_type: [1]byte{'N'}, Part_fit: [1]byte{'N'}, Part_start: -1, Part_size: -1, Part_name: [16]byte{'N'}, Part_correlative: -1, Part_id: [4]byte{'N'}},
@@ -215,11 +201,15 @@ func createMBR(mkdisk *MKDISK, sizeBytes int) error {
 		},
 	}
 
+	/* SOLO PARA VERIFICACIÓN */
+	// Imprimir MBR
+	fmt.Println("\nMBR creado:")
+	mbr.PrintMBR()
+
 	// Serializar el MBR en el archivo
 	err := mbr.SerializeMBR(mkdisk.path)
 	if err != nil {
 		fmt.Println("Error:", err)
-		return err
 	}
 
 	return nil

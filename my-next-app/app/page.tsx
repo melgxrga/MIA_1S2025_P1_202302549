@@ -25,23 +25,11 @@ export default function Home() {
   return (
     <div className="grid grid-cols-2 gap-4 min-h-screen p-8 pb-20 sm:p-20 font-[family-name:var(--font-geist-sans)]">
       <main className="flex flex-col gap-8 col-span-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
+
         <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
           <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
+            Get started by editing
           </li>
-          <li>Save and see your changes instantly.</li>
         </ol>
 
         <form onSubmit={handleSubmit} className="w-full">
@@ -50,7 +38,7 @@ export default function Home() {
             value={command}
             onChange={(e) => setCommand(e.target.value)}
             placeholder="Enter command"
-            className="border p-2 rounded w-full"
+            className="border p-2 rounded w-full text-black"
           />
           <button type="submit" className="mt-2 p-2 bg-blue-500 text-white rounded w-full">
             Analyze
@@ -61,11 +49,6 @@ export default function Home() {
       <div className="bg-black text-white p-4 rounded h-96 overflow-y-auto">
         <h2 className="text-lg font-bold">Terminal 1</h2>
         <pre>{response}</pre>
-      </div>
-
-      <div className="bg-black text-white p-4 rounded h-96 overflow-y-auto">
-        <h2 className="text-lg font-bold">Terminal 2</h2>
-        <pre>{output}</pre>
       </div>
     </div>
   );

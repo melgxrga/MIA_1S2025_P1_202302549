@@ -1,8 +1,10 @@
 
-mkdisk -size=3000 -unit=K -fit=WF -path=/home/gabriel-melgar/Escritorio/Archivos/MIA_1S2025_P1_202302549/disks/prueba1.mia
+mkdisk -size=7 -fit=WF -path=/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/disks/prueba2.mia
 mkdisk -size=3000 -path="proyecto#1/disks/prueba2.mia"
 mkdisk -size=3000 -unit=M -fit=WF -path="mkdisk -size=3000 -unit=K -fit=WF -path=/home/gabriel-melgar/Escritorio/Archivos/MIA_1S2025_P1_202302549/disks/prueba3.mia
 rmdisk -path=/home/gabriel-melgar/Escritorio/Archivos/proyecto#1/disks/DiscoLab.mia
 
 
-fdisk -type=P -path=/home/gabriel-melgar/Escritorio/Archivos/MIA_1S2025_P1_202302549/disks/prueba1.mia -Unit=K -name=Particion3 -size=150
+mount -name="Particion1" -path=/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/disks/prueba2.mia 
+
+fdisk -type=P -Unit=K -name=Particion1 -size=150 -path=/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/disks/prueba2.mia 
