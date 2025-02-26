@@ -7,4 +7,8 @@ rmdisk -path=/home/gabriel-melgar/Escritorio/Archivos/proyecto#1/disks/DiscoLab.
 
 mount -name="Particion1" -path=/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/disks/prueba2.mia 
 
-fdisk -type=P -Unit=K -name=Particion1 -size=150 -path=/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/disks/prueba2.mia 
+
+
+fdisk -type=P -Unit=M -name=ParticionPrimaria -size=153 -path=/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/disks/prueba2.mia 
+fdisk -type=E -Unit=K -name=Particion1 -size=150 -path=/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/disks/prueba2.mia 
+fdisk -type=L -Unit=K -name=ParticionLogica  -size=1 -path=/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/disks/prueba2.mia 
