@@ -365,26 +365,36 @@ func ReadEBR(path string, position int64) *structures.EBR {
 }
 
 func connectLogicalEBRs(path string, extendedStart int, newEBRPos int32) error {
-    var firstEBR structures.EBR
-    // Leer el primer EBR de la partición extendida
-    Fread(&firstEBR, path, int64(extendedStart))
+    var currentEBR structures.EBR
+    currentOffset := int64(extendedStart)
+    
+    fmt.Println("DEBUG: Iniciando el recorrido de EBRs en offset", currentOffset)
+    Fread(&currentEBR, path, currentOffset)
 
-    // Si el primer EBR está vacío, se actualiza para apuntar al nuevo EBR
-    if firstEBR.Part_size == 0 {
-        firstEBR.Part_next = newEBRPos
-        WriteEBR(&firstEBR, path, int64(extendedStart))
+    // Si el primer EBR está vacío, no es necesario actualizar ningún puntero.
+    if currentEBR.Part_size == 0 {
+        fmt.Println("DEBUG: Primer EBR está vacío, sin partición lógica definida.")
         return nil
     }
 
-    // Si ya existen particiones lógicas, recorrer hasta el último EBR
-    tempEBR := firstEBR
-    for tempEBR.Part_next != -1 {
-        Fread(&tempEBR, path, int64(tempEBR.Part_next))
+    // Recorremos la lista enlazada de EBRs hasta llegar al último (donde Part_next == -1)
+    for currentEBR.Part_next != -1 {
+        fmt.Printf("DEBUG: EBR en offset %d -> Nombre: %s, Part_next: %d, Part_size: %d\n",
+            currentOffset, string(currentEBR.Part_name[:]), currentEBR.Part_next, currentEBR.Part_size)
+        currentOffset = int64(currentEBR.Part_next)
+        Fread(&currentEBR, path, currentOffset)
     }
-    // Actualizar el último EBR para que apunte al nuevo EBR
-    lastEBRStart := tempEBR.Part_start
-    tempEBR.Part_next = newEBRPos
-    WriteEBR(&tempEBR, path, int64(lastEBRStart))
+
+    // Debug: Mostrar el último EBR encontrado
+    fmt.Printf("DEBUG: Último EBR en offset %d -> Nombre: %s, Part_next: %d, Part_size: %d\n",
+        currentOffset, string(currentEBR.Part_name[:]), currentEBR.Part_next, currentEBR.Part_size)
+
+    // Actualizamos el Part_next para apuntar a newEBRPos.
+    currentEBR.Part_next = newEBRPos
+    fmt.Printf("DEBUG: Actualizando EBR en offset %d con nuevo Part_next: %d\n", currentOffset, newEBRPos)
+
+    // Escribimos el EBR actualizado en el offset donde se leyó (currentOffset).
+    WriteEBR(&currentEBR, path, currentOffset)
     return nil
 }
 
@@ -397,8 +407,8 @@ func createLogicalPartition(fdisk *FDISK, sizeBytes int) (string, error) {
         return "", fmt.Errorf("Error deserializando el MBR: %w", err)
     }
 
-    // Buscar la partición extendida
-    var extendedFound bool = false
+    // Buscar la partición extendida en el MBR
+    var extendedFound bool
     var whereToStart int
     var extendedFit byte
     var extendedName [16]byte
@@ -432,30 +442,30 @@ func createLogicalPartition(fdisk *FDISK, sizeBytes int) (string, error) {
         fmt.Printf("  Part_id: %s\n", string(partition.Part_id[:]))
     }
 
-    // Leer el primer EBR de la partición extendida
+    // Leer el primer EBR de la partición extendida (en whereToStart)
     var firstEBR structures.EBR
     Fread(&firstEBR, fdisk.path, int64(whereToStart))
 
-    // Calcular la posición de inicio de la nueva partición lógica
     var logicPartitionStart int32
+    // Si el primer EBR está vacío, usaremos esa posición para la primera partición lógica.
     if firstEBR.Part_size == 0 {
-        logicPartitionStart = int32(whereToStart) + int32(binary.Size(firstEBR))
+        logicPartitionStart = int32(whereToStart)
     } else {
+        // Recorrer la cadena de EBR para hallar el último.
         tempEBR := firstEBR
         for tempEBR.Part_next != -1 {
             Fread(&tempEBR, fdisk.path, int64(tempEBR.Part_next))
         }
+        // Se calcula el offset para el nuevo EBR inmediatamente después del último.
         logicPartitionStart = tempEBR.Part_start + tempEBR.Part_size + int32(binary.Size(tempEBR))
-        // La conexión se realizará vía la función auxiliar
+        // Conecta el último EBR al nuevo mediante la función auxiliar.
+        err = connectLogicalEBRs(fdisk.path, whereToStart, logicPartitionStart)
+        if err != nil {
+            return "", fmt.Errorf("Error conectando particiones lógicas: %w", err)
+        }
     }
 
-    // Conectar el EBR existente con la nueva partición lógica
-    err = connectLogicalEBRs(fdisk.path, whereToStart, logicPartitionStart)
-    if err != nil {
-        return "", fmt.Errorf("Error conectando particiones lógicas: %w", err)
-    }
-
-    // Construir el nuevo EBR de la partición lógica
+    // Construir el EBR para la nueva partición lógica.
     logicPartition := structures.EBR{
         Part_status: '1',
         Part_fit:    extendedFit,
@@ -465,7 +475,7 @@ func createLogicalPartition(fdisk *FDISK, sizeBytes int) (string, error) {
     }
     copy(logicPartition.Part_name[:], []byte(fdisk.name))
 
-    // Serializar el nuevo EBR en el archivo
+    // Escribir el nuevo EBR en disco.
     WriteEBR(&logicPartition, fdisk.path, int64(logicPartitionStart))
 
     fmt.Println("\nPartición lógica creada:")
@@ -475,27 +485,66 @@ func createLogicalPartition(fdisk *FDISK, sizeBytes int) (string, error) {
     fmt.Printf("Part_status: %c\n", logicPartition.Part_status)
     fmt.Printf("Part_name: %s\n", string(logicPartition.Part_name[:]))
 
-    // Actualizar el MBR si fuese necesario.
+    // Serializar el MBR si fuese necesario.
     err = mbr.SerializeMBR(fdisk.path)
     if err != nil {
         fmt.Println("Error:", err)
     }
 
     // Imprimir detalles de la partición extendida y sus particiones lógicas
-    PrintExtendedPartitionDetails(fdisk.path, int64(whereToStart), int64(sizeBytes), extendedName)
+    PrintExtendedPartitionDetails(fdisk.path, int64(whereToStart))
 
     return "", nil
 }
+// Actualizamos la función de impresión para recorrer la lista enlazada de EBRs
+// y mostrar los datos de cada EBR (que representan las particiones lógicas) de forma secuencial.
+func PrintExtendedPartitionDetails(path string, extendedStart int64) {
+    var mbr structures.MBR
+    err := mbr.DeserializeMBR(path)
+    if err != nil {
+        fmt.Println("Error deserializando el MBR:", err)
+        return
+    }
 
-// PrintExtendedPartitionDetails imprime los detalles de la partición extendida y sus particiones lógicas.
-func PrintExtendedPartitionDetails(path string, whereToStart, partitionSize int64, extendedName [16]byte) {
+    // Buscar la partición extendida en el MBR para obtener los datos correctos
+    var extendedPartition structures.PARTITION
+    for _, part := range mbr.Mbr_partitions {
+        if part.Part_type[0] == 'E' || part.Part_type[0] == 'e' {
+            extendedPartition = part
+            break
+        }
+    }
+
     fmt.Println("\nDetalles de la partición extendida:")
-    fmt.Printf("Nombre: %s\n", string(TrimArray(extendedName[:])))
-    fmt.Printf("Tamaño: %d\n", partitionSize)
-    fmt.Printf("Inicio: %d\n", whereToStart)
+    fmt.Printf("Nombre: %s\n", string(extendedPartition.Part_name[:]))
+    fmt.Printf("Tamaño: %d\n", extendedPartition.Part_size)
+    fmt.Printf("Inicio: %d\n", extendedPartition.Part_start)
 
     fmt.Println("\nParticiones lógicas dentro de la partición extendida:")
-    PrintLogicPartitions(path, whereToStart, partitionSize, extendedName)
+    fmt.Println("----------------------------------------------------------------------")
+    fmt.Printf("%-20s %-10s %-10s %-10s %-10s %-10s\n", "Name", "Next Part", "Fit", "Start", "Size", "Status")
+    fmt.Println("----------------------------------------------------------------------")
+
+    // Leer el primer EBR (al inicio de la partición extendida)
+    var ebr structures.EBR
+    Fread(&ebr, path, int64(extendedPartition.Part_start))
+    for {
+        // Solo mostrar si la partición lógica tiene tamaño definido
+        if ebr.Part_size > 0 {
+            fmt.Printf("%-20s %-10d %-10c %-10d %-10d %-10c\n",
+                string(ebr.Part_name[:]),
+                ebr.Part_next,
+                ebr.Part_fit,
+                ebr.Part_start,
+                ebr.Part_size,
+                ebr.Part_status)
+        }
+        if ebr.Part_next == -1 {
+            break
+        }
+        Fread(&ebr, path, int64(ebr.Part_next))
+    }
+    fmt.Println("----------------------------------------------------------------------")
 }
 
 func (fdisk  *FDISK) CreateLogicPartition(logicPartition  *structures.EBR, path string, whereToStart int, partitionSize int, extendedFit byte, extendedName [16]byte) bool {
