@@ -1,155 +1,166 @@
-package commands
+package comandos
 
 import (
-	stores "CLASE03/stores"
-	structures "CLASE03/structures"
-	utils "CLASE03/utils"
-	"errors" // Paquete para manejar errores y crear nuevos errores con mensajes personalizados
-	"fmt"    // Paquete para formatear cadenas y realizar operaciones de entrada/salida
-	"regexp" // Paquete para trabajar con expresiones regulares, útil para encontrar y manipular patrones en cadenas
-
-	// Paquete para convertir cadenas a otros tipos de datos, como enteros
-	"strings" // Paquete para manipular cadenas, como unir, dividir, y modificar contenido de cadenas
+	"bytes"
+	"fmt"
+	"strings"
+	"regexp"  // Paquete para trabajar con expresiones regulares, útil para encontrar y manipular patrones en cadenas
+	"github.com/melgxrga/proyecto1Archivos/consola"
+	"github.com/melgxrga/proyecto1Archivos/structures"
+	"github.com/melgxrga/proyecto1Archivos/functions"
+	"github.com/melgxrga/proyecto1Archivos/list"
 )
 
-// MOUNT estructura que representa el comando mount con sus parámetros
-type MOUNT struct {
-	path string // Ruta del archivo del disco
-	name string // Nombre de la partición
+type ParametrosMount struct {
+	Path string
+	Name [16]byte
 }
 
-/*
-	mount -path=/home/Disco1.mia -name=Part1 #id=341a
-	mount -path=/home/Disco2.mia -name=Part1 #id=342a
-	mount -path=/home/Disco3.mia -name=Part2 #id=343a
-*/
+type Mount struct {
+	Params ParametrosMount
+}
 
-// CommandMount parsea el comando mount y devuelve una instancia de MOUNT
-func ParseMount(tokens []string) (*MOUNT, error) {
-	cmd := &MOUNT{} // Crea una nueva instancia de MOUNT
+func (m *Mount) Exe(parametros []string) {
+	m.Params = m.SaveParams(parametros)
+	if m.Mount(m.Params.Path, m.Params.Name) {
+		consola.AddToConsole(fmt.Sprintf("\nparticion %s montada con exito\n\n", m.Params.Path))
+	} else {
+		consola.AddToConsole(fmt.Sprintf("no se logro montar la particion %s\n", m.Params.Path))
+	}
+}
 
-	// Unir tokens en una sola cadena y luego dividir por espacios, respetando las comillas
-	args := strings.Join(tokens, " ")
-	// Expresión regular para encontrar los parámetros del comando mount
+func (m *Mount) SaveParams(parametros []string) ParametrosMount {
+	var params ParametrosMount
+	// Unir todos los parámetros en una sola cadena
+	args := strings.Join(parametros, " ")
+
+	// Expresión regular para capturar los parámetros
 	re := regexp.MustCompile(`-path="[^"]+"|-path=[^\s]+|-name="[^"]+"|-name=[^\s]+`)
-	// Encuentra todas las coincidencias de la expresión regular en la cadena de argumentos
 	matches := re.FindAllString(args, -1)
 
-	// Itera sobre cada coincidencia encontrada
+	// Iterar sobre cada coincidencia
 	for _, match := range matches {
-		// Divide cada parte en clave y valor usando "=" como delimitador
 		kv := strings.SplitN(match, "=", 2)
 		if len(kv) != 2 {
-			return nil, fmt.Errorf("formato de parámetro inválido: %s", match)
+			fmt.Printf("Formato de parámetro inválido: %s\n", match)
+			continue
 		}
 		key, value := strings.ToLower(kv[0]), kv[1]
 
-		// Remove quotes from value if present
+		// Quitar comillas si las tiene
 		if strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
 			value = strings.Trim(value, "\"")
 		}
 
-		// Switch para manejar diferentes parámetros
+		// Procesar según el parámetro encontrado
 		switch key {
 		case "-path":
-			// Verifica que el path no esté vacío
 			if value == "" {
-				return nil, errors.New("el path no puede estar vacío")
+				fmt.Println("Error: el path no puede estar vacío")
+				continue
 			}
-			cmd.path = value
+			params.Path = value
 		case "-name":
-			// Verifica que el nombre no esté vacío
 			if value == "" {
-				return nil, errors.New("el nombre no puede estar vacío")
+				fmt.Println("Error: el nombre no puede estar vacío")
+				continue
 			}
-			cmd.name = value
+			copy(params.Name[:], value)
 		default:
-			// Si el parámetro no es reconocido, devuelve un error
-			return nil, fmt.Errorf("parámetro desconocido: %s", key)
+			fmt.Printf("Parámetro desconocido: %s\n", key)
 		}
 	}
 
-	// Verifica que los parámetros -path y -name hayan sido proporcionados
-	if cmd.path == "" {
-		return nil, errors.New("faltan parámetros requeridos: -path")
+	// Validación final de los parámetros obligatorios
+	if params.Path == "" {
+		fmt.Println("Error: Falta el parámetro obligatorio -path")
 	}
-	if cmd.name == "" {
-		return nil, errors.New("faltan parámetros requeridos: -name")
-	}
-
-	// Montamos la partición
-	err := commandMount(cmd)
-	if err != nil {
-		fmt.Println("Error:", err)
+	if params.Name == [16]byte{} {
+		fmt.Println("Error: Falta el parámetro obligatorio -name")
 	}
 
-	return cmd, nil // Devuelve el comando MOUNT creado
+	return params
 }
 
-func commandMount(mount *MOUNT) error {
-	// Crear una instancia de MBR
-	var mbr structures.MBR
 
-	// Deserializar la estructura MBR desde un archivo binario
-	err := mbr.DeserializeMBR(mount.path)
-	if err != nil {
-		fmt.Println("Error deserializando el MBR:", err)
-		return err
+func (m *Mount) Mount(path string, name [16]byte) bool {
+	// comprobando que el parametro "path" sea diferente de ""
+	if path == "" {
+		consola.AddToConsole("no se encontro una ruta\n")
+		return false
 	}
-
-	// Buscar la partición con el nombre especificado
-	partition, indexPartition := mbr.GetPartitionByName(mount.name)
-	if partition == nil {
-		fmt.Println("Error: la partición no existe")
-		return errors.New("la partición no existe")
+	// comprobando que el parametro "name" sea diferente de ""
+	if bytes.Equal(name[:], []byte("")) {
+		consola.AddToConsole("se debe de contar con un nombre para realizar este comando\n")
+		return false
 	}
+	master := GetMBR(path)
+	partitionMounted := false
+	particionEncontrada := false
+	for _, particion := range master.Mbr_partitions {
+		// si entro aqui es porque si leyo el MBR del disco
+		if bytes.Equal(particion.Part_name[:], name[:]) {
+			// comprobaremos que la particion no se haya montado previamente
+			particionEncontrada = true
+			if particion.Part_status == '2' {
+				consola.AddToConsole("la particion ya se encuentra montada\n")
+				return false
+			}
+			if particion.Part_type == 'e' || particion.Part_type == 'E' {
+				consola.AddToConsole("no se puede montar una particion extendida\n")
+				return false
+			}
+			particion.Part_type = '2'
+			var part *datos.Partition = new(datos.Partition)
+			part = &particion
+			lista.ListaMount.Mount(path, 49, part, nil)
+			partitionMounted = true
+			// tener un metodo de MountList que agregue un texto a la consola
+			lista.ListaMount.PrintList()
+			break
 
-	/* SOLO PARA VERIFICACIÓN */
-	// Print para verificar que la partición se encontró correctamente
-	fmt.Println("\nPartición disponible:")
-	partition.PrintPartition()
-
-	// Generar un id único para la partición
-	idPartition, partitionCorrelative, err := generatePartitionID(mount)
-	if err != nil {
-		fmt.Println("Error generando el id de partición:", err)
-		return err
+		}
 	}
-
-	//  Guardar la partición montada en la lista de montajes globales
-	stores.MountedPartitions[idPartition] = mount.path
-
-	// Modificamos la partición para indicar que está montada
-	partition.MountPartition(partitionCorrelative, idPartition)
-
-	/* SOLO PARA VERIFICACIÓN */
-	// Print para verificar que la partición se haya montado correctamente
-	fmt.Println("\nPartición montada (modificada):")
-	partition.PrintPartition()
-
-	// Guardar la partición modificada en el MBR
-	mbr.Mbr_partitions[indexPartition] = *partition
-
-	// Serializar la estructura MBR en el archivo binario
-	err = mbr.SerializeMBR(mount.path)
-	if err != nil {
-		fmt.Println("Error serializando el MBR:", err)
-		return err
+	if !particionEncontrada {
+		// buscaremos si existe una particion logica con ese nombre
+		for _, particion := range master.Mbr_partitions {
+			if particion.Part_type == 'e' || particion.Part_type == 'E' {
+				partitionMounted = true
+				m.MountParticionLogica(path, int(particion.Part_start), name)
+				// tener un metodo de Mount List que agregue un texto a la consola
+				lista.ListaMount.PrintList()
+			}
+		}
 	}
-
-	return nil
+	if !partitionMounted {
+		consola.AddToConsole(fmt.Sprintf("no se encontro una particion con el nombre de %s\n", string(functions.TrimArray(name[:]))))
+		return false
+	}
+	WriteMBR(&master, path)
+	return true
 }
 
-func generatePartitionID(mount *MOUNT) (string, int, error) {
-	// Asignar una letra a la partición y obtener el índice
-	letter, partitionCorrelative, err := utils.GetLetterAndPartitionCorrelative(mount.path)
-	if err != nil {
-		fmt.Println("Error obteniendo la letra:", err)
-		return "", 0, err
+func (m *Mount) MountParticionLogica(path string, whereToStart int, name [16]byte) {
+	logicPartitionMounted := false
+	temp := ReadEBR(path, int64(whereToStart))
+	flag := true
+	for flag {
+		if bytes.Equal(temp.Part_name[:], name[:]) {
+			temp.Part_status = '2'
+			var partL *datos.EBR = new(datos.EBR)
+			partL = &temp
+			lista.ListaMount.Mount(path, 49, nil, partL)
+			logicPartitionMounted = true
+			flag = false
+			break
+		} else if temp.Part_next != -1 {
+			temp = ReadEBR(path, temp.Part_next)
+		} else {
+			flag = false
+		}
 	}
-
-	// Crear id de partición
-	idPartition := fmt.Sprintf("%s%d%s", stores.Carnet, partitionCorrelative, letter)
-
-	return idPartition, partitionCorrelative, nil
+	if !logicPartitionMounted {
+		consola.AddToConsole(fmt.Sprintf("no se encontro una particion con el nombre %s\n", string(functions.TrimArray(name[:]))))
+		return
+	}
 }

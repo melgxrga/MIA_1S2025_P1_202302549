@@ -1,183 +1,282 @@
-package commands
+package comandos
 
 import (
-	stores "CLASE03/stores"
-	structures "CLASE03/structures"
-	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
-	"regexp"
 	"strings"
 	"time"
+	"unsafe"
+	"regexp"
+	"github.com/melgxrga/proyecto1Archivos/consola"
+	lista "github.com/melgxrga/proyecto1Archivos/list"
+	datos "github.com/melgxrga/proyecto1Archivos/structures"
 )
 
-// MKFS estructura que representa el comando mkfs con sus parámetros
-type MKFS struct {
-	id  string // ID del disco
-	typ string // Tipo de formato (full)
+type ParametrosMkfs struct {
+	Id string
+	T  string
 }
 
-/*
-   mkfs -id=vd1 -type=full
-   mkfs -id=vd2
-*/
+type Mkfs struct {
+	Params ParametrosMkfs
+}
 
-func ParseMkfs(tokens []string) (*MKFS, error) {
-	cmd := &MKFS{} // Crea una nueva instancia de MKFS
+func (m *Mkfs) Exe(parametros []string) {
+	m.Params = m.SaveParams(parametros)
+	if m.Mkfs(m.Params.Id, m.Params.T) {
+		consola.AddToConsole(fmt.Sprintf("\nel formateo con EXT2 de la particion con id %s fue exitoso\n\n", m.Params.Id))
+	} else {
+		consola.AddToConsole(fmt.Sprintf("no se logro formatear la particion con id %s\n", m.Params.Id))
+	}
+}
 
-	// Unir tokens en una sola cadena y luego dividir por espacios, respetando las comillas
-	args := strings.Join(tokens, " ")
-	// Expresión regular para encontrar los parámetros del comando mkfs
-	re := regexp.MustCompile(`-id=[^\s]+|-type=[^\s]+`)
-	// Encuentra todas las coincidencias de la expresión regular en la cadena de argumentos
+func (m *Mkfs) SaveParams(parametros []string) ParametrosMkfs {
+	var params ParametrosMkfs
+	args := strings.Join(parametros, " ")
+	re := regexp.MustCompile(`-id=[^\s]+|-type=[fF]{4}`)  
 	matches := re.FindAllString(args, -1)
-
-	// Itera sobre cada coincidencia encontrada
 	for _, match := range matches {
-		// Divide cada parte en clave y valor usando "=" como delimitador
 		kv := strings.SplitN(match, "=", 2)
 		if len(kv) != 2 {
-			return nil, fmt.Errorf("formato de parámetro inválido: %s", match)
+			fmt.Printf("Formato de parámetro inválido: %s\n", match)
+			continue
 		}
 		key, value := strings.ToLower(kv[0]), kv[1]
-
-		// Remove quotes from value if present
-		if strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
-			value = strings.Trim(value, "\"")
-		}
-
-		// Switch para manejar diferentes parámetros
-		switch key {
+		switch key []
 		case "-id":
-			// Verifica que el id no esté vacío
 			if value == "" {
-				return nil, errors.New("el id no puede estar vacío")
+				fmt.Println("Error: el ID no puede estar vacío")
+				continue
 			}
-			cmd.id = value
+			params.Id = value
 		case "-type":
-			// Verifica que el tipo sea "full"
-			if value != "full" {
-				return nil, errors.New("el tipo debe ser full")
+			value = strings.ToUpper(value)
+			if value != "FULL" {
+				fmt.Println("Error: el tipo debe ser FULL")
+				continue
 			}
-			cmd.typ = value
-		default:
-			// Si el parámetro no es reconocido, devuelve un error
-			return nil, fmt.Errorf("parámetro desconocido: %s", key)
+			params.T = value
 		}
 	}
 
-	// Verifica que el parámetro -id haya sido proporcionado
-	if cmd.id == "" {
-		return nil, errors.New("faltan parámetros requeridos: -id")
+	// Validación final de los parámetros obligatorios
+	if params.Id == "" {
+		fmt.Println("Error: Falta el parámetro obligatorio -id")
 	}
 
-	// Si no se proporcionó el tipo, se establece por defecto a "full"
-	if cmd.typ == "" {
-		cmd.typ = "full"
+	// Valor por defecto para type si no se proporcionó
+	if params.T == "" {
+		params.T = "FULL"
 	}
 
-	// Aquí se puede agregar la lógica para ejecutar el comando mkfs con los parámetros proporcionados
-	err := commandMkfs(cmd)
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-
-	return cmd, nil // Devuelve el comando MKFS creado
+	return params
 }
 
-func commandMkfs(mkfs *MKFS) error {
-	// Obtener la partición montada
-	mountedPartition, partitionPath, err := stores.GetMountedPartition(mkfs.id)
-	if err != nil {
-		return err
+
+func (m *Mkfs) Mkfs(id string, t string) bool {
+	// Depuración: Mostrar el ID recibido
+	fmt.Printf("Depuración: ID recibido -> '%s'\n", id)
+
+	// Comprobando que id no esté vacío
+	if id == "" {
+		consola.AddToConsole("Error: No se encontró el ID entre los comandos\n")
+		return false
 	}
 
-	// Verificar la partición montada
-	fmt.Println("\nPatición montada:")
-	mountedPartition.PrintPartition()
-
-	// Calcular el valor de n
-	n := calculateN(mountedPartition)
-
-	// Verificar el valor de n
-	fmt.Println("\nValor de n:", n)
-
-	// Inicializar un nuevo superbloque
-	superBlock := createSuperBlock(mountedPartition, n)
-
-	// Verificar el superbloque
-	fmt.Println("\nSuperBlock:")
-	superBlock.Print()
-
-	// Crear los bitmaps
-	err = superBlock.CreateBitMaps(partitionPath)
-	if err != nil {
-		return err
+	// Comprobando que type tenga un valor correcto
+	if t != "full" && t != "FULL" && t != "" {
+		consola.AddToConsole("Error: El valor del comando type no es permitido\n")
+		return false
+	}
+	if t == "" || t == "full" {
+		t = "FULL"
 	}
 
-	// Crear archivo users.txt
-	err = superBlock.CreateUsersFile(partitionPath)
-	if err != nil {
-		return err
+	// Depuración: Mostrar todas las particiones montadas antes de buscar el nodo
+	fmt.Println("Depuración: Lista de particiones montadas antes de buscar el nodo:")
+	lista.ListaMount.PrintList() // Asegúrate de tener un método PrintAll en ListaMount para imprimir todos los montajes
+
+	// Creando nuestro nodo auxiliar
+	nodo := lista.ListaMount.GetNodeById(id)
+
+	// Depuración: Verificar si encontró el nodo
+	if nodo == nil {
+		fmt.Printf("Error: El ID '%s' no coincide con ninguna partición montada\n", id)
+		consola.AddToConsole(fmt.Sprintf("El ID '%s' no coincide con ninguna partición montada\n", id))
+		return false
+	} else {
+		fmt.Printf("Depuración: Nodo encontrado -> ID: %s, Ruta: %s\n", id, nodo.Ruta)
 	}
 
-	// Verificar superbloque actualizado
-	fmt.Println("\nSuperBlock actualizado:")
-	superBlock.Print()
-
-	// Serializar el superbloque
-	err = superBlock.Serialize(partitionPath, int64(mountedPartition.Part_start))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	// Llamar a Ext2 para formatear la partición
+	m.Ext2(nodo)
+	return true
 }
 
-func calculateN(partition *structures.PARTITION) int32 {
-	/*
-		numerador = (partition_montada.size - sizeof(Structs::Superblock)
-		denominador base = (4 + sizeof(Structs::Inodes) + 3 * sizeof(Structs::Fileblock))
-		n = floor(numerador / denominador)
-	*/
 
-	numerator := int(partition.Part_size) - binary.Size(structures.SuperBlock{})
-	denominator := 4 + binary.Size(structures.Inode{}) + 3*binary.Size(structures.FileBlock{}) // No importa que bloque poner, ya que todos tienen el mismo tamaño
-	n := math.Floor(float64(numerator) / float64(denominator))
+func (m *Mkfs) Ext2(nodo *lista.MountNode) {
+	whereToStart := 0
+	partSize := 0
+	if nodo.Value != nil {
+		whereToStart = int(nodo.Value.Part_start)
+		partSize = int(nodo.Value.Part_size)
+	} else if nodo.ValueL != nil {
+		whereToStart = int(nodo.ValueL.Part_start) + int(unsafe.Sizeof(datos.EBR{}))
+		partSize = int(nodo.ValueL.Part_size)
+	}
+	n := float64(float64(partSize-int(unsafe.Sizeof(datos.SuperBloque{}))) / float64(4+int(unsafe.Sizeof(datos.TablaInodo{}))+3*int(unsafe.Sizeof(datos.BloqueDeArchivos{}))))
+	// fmt.Println(math.Floor(n))
+	if math.Floor(n) < 1 {
+		consola.AddToConsole("el tamano de la particion es mas pequeno que el sistema de archivos\n")
+		return
+	}
+	inodesQuantity := int64(math.Floor(n))
+	blocksQuantity := int64(3 * inodesQuantity)
 
-	return int32(n)
-}
-
-func createSuperBlock(partition *structures.PARTITION, n int32) *structures.SuperBlock {
-	// Calcular punteros de las estructuras
-	// Bitmaps
-	bm_inode_start := partition.Part_start + int32(binary.Size(structures.SuperBlock{}))
-	bm_block_start := bm_inode_start + n // n indica la cantidad de inodos, solo la cantidad para ser representada en un bitmap
-	// Inodos
-	inode_start := bm_block_start + (3 * n) // 3*n indica la cantidad de bloques, se multiplica por 3 porque se tienen 3 tipos de bloques
-	// Bloques
-	block_start := inode_start + (int32(binary.Size(structures.Inode{})) * n) // n indica la cantidad de inodos, solo que aquí indica la cantidad de estructuras Inode
-
-	// Crear un nuevo superbloque
-	superBlock := &structures.SuperBlock{
+	// llenando la estructura del superbloque
+	superBlock := datos.SuperBloque{
 		S_filesystem_type:   2,
-		S_inodes_count:      0,
-		S_blocks_count:      0,
-		S_free_inodes_count: int32(n),
-		S_free_blocks_count: int32(n * 3),
-		S_mtime:             float32(time.Now().Unix()),
-		S_umtime:            float32(time.Now().Unix()),
-		S_mnt_count:         1,
+		S_inodes_count:      inodesQuantity,
+		S_blocks_count:      blocksQuantity,
+		S_free_inodes_count: inodesQuantity - 2,
+		S_free_blocks_count: blocksQuantity - 2,
+		S_mnt_count:         0,
 		S_magic:             0xEF53,
-		S_inode_size:        int32(binary.Size(structures.Inode{})),
-		S_block_size:        int32(binary.Size(structures.FileBlock{})),
-		S_first_ino:         inode_start,
-		S_first_blo:         block_start,
-		S_bm_inode_start:    bm_inode_start,
-		S_bm_block_start:    bm_block_start,
-		S_inode_start:       inode_start,
-		S_block_start:       block_start,
+		S_inode_size:        int64(unsafe.Sizeof(datos.TablaInodo{})),
+		S_block_size:        int64(unsafe.Sizeof(datos.BloqueDeArchivos{})),
+		S_first_ino:         2,
+		S_first_blo:         2,
 	}
-	return superBlock
+	superBlock.S_bm_inode_start = int64(whereToStart) + int64(unsafe.Sizeof(datos.SuperBloque{}))
+	superBlock.S_bm_block_start = superBlock.S_bm_inode_start + inodesQuantity
+	superBlock.S_inode_start = superBlock.S_bm_block_start + blocksQuantity
+	superBlock.S_block_start = superBlock.S_inode_start + int64(unsafe.Sizeof(datos.TablaInodo{})*uintptr(inodesQuantity))
+	date := time.Now()
+	for i := 0; i < len(superBlock.S_mtime)-1; i++ {
+		superBlock.S_mtime[i] = date.String()[i]
+	}
+
+	// escribiendo el superbloque
+	Fwrite(&superBlock, nodo.Ruta, int64(whereToStart))
+
+	// buffers para bloques e inodos
+	inodos := make([]byte, inodesQuantity)
+	bloques := make([]byte, blocksQuantity)
+
+	// llenando los buffers
+	for i := 0; i < len(inodos); i++ {
+		inodos[i] = '0'
+	}
+	for i := 0; i < len(bloques); i++ {
+		bloques[i] = '0'
+	}
+
+	// inodos ocupados
+	inodos[0] = '1'
+	inodos[1] = '1'
+	Fwrite(&inodos, nodo.Ruta, superBlock.S_bm_inode_start)
+
+	// bloques ocupados
+	bloques[0] = '1'
+	bloques[1] = '1'
+	Fwrite(&bloques, nodo.Ruta, superBlock.S_bm_block_start)
+
+	// crear tabla de inodos root
+	rootInodeTable := datos.TablaInodo{
+		I_uid:  1,
+		I_gid:  1,
+		I_size: 0,
+		I_type: '0',
+		I_perm: 664,
+	}
+	// llenando las fechas
+	atime := time.Now()
+	for i := 0; i < len(rootInodeTable.I_atime)-1; i++ {
+		rootInodeTable.I_atime[i] = atime.String()[i]
+	}
+	ctime := time.Now()
+	for i := 0; i < len(rootInodeTable.I_atime)-1; i++ {
+		rootInodeTable.I_ctime[i] = ctime.String()[i]
+	}
+	mtime := time.Now()
+	for i := 0; i < len(rootInodeTable.I_atime)-1; i++ {
+		rootInodeTable.I_mtime[i] = mtime.String()[i]
+	}
+	// llenando a todos los bloques no utilizados
+	for i := 0; i < len(rootInodeTable.I_block); i++ {
+		rootInodeTable.I_block[i] = -1
+	}
+	// apuntando al bloque 0 (bloque de carpetas root)
+	rootInodeTable.I_block[0] = 0
+
+	// escribiendo la tabla de inodos root
+	Fwrite(&rootInodeTable, nodo.Ruta, superBlock.S_inode_start)
+
+	// creando el bloque de carpetas root
+	bloqueCarpetasRoot := datos.BloqueDeCarpetas{}
+
+	copy(bloqueCarpetasRoot.B_content[0].B_name[:], ".")
+	bloqueCarpetasRoot.B_content[0].B_inodo = 0
+
+	copy(bloqueCarpetasRoot.B_content[1].B_name[:], "..")
+	bloqueCarpetasRoot.B_content[1].B_inodo = 0
+
+	copy(bloqueCarpetasRoot.B_content[2].B_name[:], "users.txt")
+	bloqueCarpetasRoot.B_content[2].B_inodo = 1
+
+	copy(bloqueCarpetasRoot.B_content[3].B_name[:], "")
+	bloqueCarpetasRoot.B_content[3].B_inodo = -1
+
+	// llenando el archivo users.txt
+	content := "1,G,root\n1,U,root,root,123\n"
+
+	// crear tabla de inodos de archivo
+	fileInodeTable := datos.TablaInodo{
+		I_uid:  1,
+		I_gid:  1,
+		I_size: 0,
+		I_type: '1',
+		I_perm: 664,
+	}
+	// llenando las fechas
+	atime = time.Now()
+	for i := 0; i < len(fileInodeTable.I_atime)-1; i++ {
+		fileInodeTable.I_atime[i] = atime.String()[i]
+	}
+	ctime = time.Now()
+	for i := 0; i < len(fileInodeTable.I_atime)-1; i++ {
+		fileInodeTable.I_ctime[i] = ctime.String()[i]
+	}
+	mtime = time.Now()
+	for i := 0; i < len(fileInodeTable.I_atime)-1; i++ {
+		fileInodeTable.I_mtime[i] = mtime.String()[i]
+	}
+	// llenando a todos los bloques no utilizados
+	for i := 0; i < len(fileInodeTable.I_block); i++ {
+		fileInodeTable.I_block[i] = -1
+	}
+	// apuntando al bloque 1 (primer bloque de archivos creado para users.txt)
+	fileInodeTable.I_block[0] = 1
+
+	// crear bloque de archivos y escribiendo el contenido
+	bloqueArchivos := datos.BloqueDeArchivos{}
+	copy(bloqueArchivos.B_content[:], []byte(content))
+
+	// escribiendo el bloque de carpetas root
+	Fwrite(&bloqueCarpetasRoot, nodo.Ruta, superBlock.S_block_start)
+
+	// escribiendo la tabla de inodos del archivo users.txt
+	Fwrite(&fileInodeTable, nodo.Ruta, superBlock.S_inode_start+int64(unsafe.Sizeof(datos.TablaInodo{})))
+
+	// escribiendo el bloque 1 del archivo users.txt
+	Fwrite(&bloqueArchivos, nodo.Ruta, superBlock.S_block_start+int64(unsafe.Sizeof(datos.BloqueDeArchivos{})))
+
+	if nodo.Value != nil {
+		// aqui deberia de ir un metodo para guardar para la consola
+		fmt.Println("")
+	} else if nodo.ValueL != nil {
+		// aqui igual deberia de ir
+		fmt.Println("")
+	}
+	consola.AddToConsole("El formateo fue exitoso\n")
 }

@@ -1,216 +1,191 @@
-package commands
+package comandos
 
 import (
-	structures "CLASE03/structures"
-	utils "CLASE03/utils"
-	"errors"        // Paquete para manejar errores y crear nuevos errores con mensajes personalizados
-	"fmt"           // Paquete para formatear cadenas y realizar operaciones de entrada/salida
-	"math/rand"     // Paquete para generar números aleatorios
-	"os"            // Paquete para interactuar con el sistema operativo
-	"path/filepath" // Paquete para trabajar con rutas de archivos y directorios
-	"regexp"        // Paquete para trabajar con expresiones regulares, útil para encontrar y manipular patrones en cadenas
-	"strconv"       // Paquete para convertir cadenas a otros tipos de datos, como enteros
-	"strings"       // Paquete para manipular cadenas, como unir, dividir, y modificar contenido de cadenas
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
 	"time"
+	"regexp"      
+	"github.com/melgxrga/proyecto1Archivos/consola"
+	"github.com/melgxrga/proyecto1Archivos/structures"
 )
 
-// MKDISK estructura que representa el comando mkdisk con sus parámetros
-type MKDISK struct {
-	size int    // Tamaño del disco
-	unit string // Unidad de medida del tamaño (K o M)
-	fit  string // Tipo de ajuste (BF, FF, WF)
-	path string // Ruta del archivo del disco
+type ParametrosMkdisk struct {
+	Size int
+	Fit  byte
+	Unit byte
+	Path string
 }
 
-/*
-   mkdisk -size=3000 -unit=K -path=/home/user/Disco1.mia
-   mkdisk -size=3000 -path=/home/user/Disco1.mia
-   mkdisk -size=5 -unit=M -fit=WF -path="/home/keviin/University/PRACTICAS/MIA_LAB_S2_2024/CLASE03/disks/Disco1.mia"
-   mkdisk -size=10 -path="/home/mis discos/Disco4.mia"
-*/
+type Mkdisk struct {
+	Params ParametrosMkdisk
+}
 
-func ParseMkdisk(tokens []string) (*MKDISK, error) {
-	cmd := &MKDISK{} // Crea una nueva instancia de MKDISK
+func (m *Mkdisk) Exe(parametros []string) {
+	m.Params = m.SaveParams(parametros)
+	if m.Mkdisk(m.Params.Size, m.Params.Fit, m.Params.Unit, m.Params.Path) {
+		consola.AddToConsole(fmt.Sprintf("\nmkdisk realizado con exito para la ruta raiz: %s\n\n", m.Params.Path))
+	} else {
+		consola.AddToConsole(fmt.Sprintf("\n[ERROR!] no se logro realizar el comando mkdisk para la ruta raiz: %s\n\n", m.Params.Path))
+	}
+}
 
-	// Unir tokens en una sola cadena y luego dividir por espacios, respetando las comillas
-	args := strings.Join(tokens, " ")
-	// Expresión regular para encontrar los parámetros del comando mkdisk
+func (m *Mkdisk) SaveParams(parametros []string) ParametrosMkdisk {
+	var params ParametrosMkdisk
+	// Unir todos los parámetros en una sola cadena
+	args := strings.Join(parametros, " ")
+
+	// Expresión regular para capturar los parámetros
 	re := regexp.MustCompile(`-size=\d+|-unit=[kKmM]|-fit=[bBfFwW]{2}|-path="[^"]+"|-path=[^\s]+`)
-	// Encuentra todas las coincidencias de la expresión regular en la cadena de argumentos
 	matches := re.FindAllString(args, -1)
 
-	// Itera sobre cada coincidencia encontrada
+	// Iterar sobre cada coincidencia
 	for _, match := range matches {
-		// Divide cada parte en clave y valor usando "=" como delimitador
 		kv := strings.SplitN(match, "=", 2)
 		if len(kv) != 2 {
-			return nil, fmt.Errorf("formato de parámetro inválido: %s", match)
+			fmt.Printf("Formato de parámetro inválido: %s\n", match)
+			continue
 		}
 		key, value := strings.ToLower(kv[0]), kv[1]
 
-		// Remove quotes from value if present
+		// Quitar comillas si las tiene
 		if strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
 			value = strings.Trim(value, "\"")
 		}
 
-		// Switch para manejar diferentes parámetros
 		switch key {
 		case "-size":
-			// Convierte el valor del tamaño a un entero
 			size, err := strconv.Atoi(value)
 			if err != nil || size <= 0 {
-				return nil, errors.New("el tamaño debe ser un número entero positivo")
+				fmt.Println("Error: el tamaño debe ser un número entero positivo")
+				continue
 			}
-			cmd.size = size
+			params.Size = size
 		case "-unit":
-			// Verifica que la unidad sea "K" o "M"
+			value = strings.ToUpper(value)
 			if value != "K" && value != "M" {
-				return nil, errors.New("la unidad debe ser K o M")
+				fmt.Println("Error: la unidad debe ser K o M")
+				continue
 			}
-			cmd.unit = strings.ToUpper(value)
+			params.Unit = value[0]
 		case "-fit":
-			// Verifica que el ajuste sea "BF", "FF" o "WF"
 			value = strings.ToUpper(value)
 			if value != "BF" && value != "FF" && value != "WF" {
-				return nil, errors.New("el ajuste debe ser BF, FF o WF")
+				fmt.Println("Error: el ajuste debe ser BF, FF o WF")
+				continue
 			}
-			cmd.fit = value
+			params.Fit = value[0]
 		case "-path":
-			// Verifica que el path no esté vacío
 			if value == "" {
-				return nil, errors.New("el path no puede estar vacío")
+				fmt.Println("Error: el path no puede estar vacío")
+				continue
 			}
-			cmd.path = value
+			params.Path = value
 		default:
-			// Si el parámetro no es reconocido, devuelve un error
-			return nil, fmt.Errorf("parámetro desconocido: %s", key)
+			fmt.Printf("Parámetro desconocido: %s\n", key)
 		}
 	}
 
-	// Verifica que los parámetros -size y -path hayan sido proporcionados
-	if cmd.size == 0 {
-		return nil, errors.New("faltan parámetros requeridos: -size")
+	// Validación final de los parámetros obligatorios
+	if params.Size == 0 {
+		fmt.Println("Error: Falta el parámetro obligatorio -size")
 	}
-	if cmd.path == "" {
-		return nil, errors.New("faltan parámetros requeridos: -path")
-	}
-
-	// Si no se proporcionó la unidad, se establece por defecto a "M"
-	if cmd.unit == "" {
-		cmd.unit = "M"
+	if params.Path == "" {
+		fmt.Println("Error: Falta el parámetro obligatorio -path")
 	}
 
-	// Si no se proporcionó el ajuste, se establece por defecto a "FF"
-	if cmd.fit == "" {
-		cmd.fit = "FF"
+	// Valores por defecto si no se proporcionaron
+	if params.Unit == 0 {
+		params.Unit = 'M'
+	}
+	if params.Fit == 0 {
+		params.Fit = 'F'
 	}
 
-	// Crear el disco con los parámetros proporcionados
-	err := commandMkdisk(cmd)
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-
-	return cmd, nil // Devuelve el comando MKDISK creado
+	return params
 }
 
-func commandMkdisk(mkdisk *MKDISK) error {
-	// Convertir el tamaño a bytes
-	sizeBytes, err := utils.ConvertToBytes(mkdisk.size, mkdisk.unit)
-	if err != nil {
-		fmt.Println("Error converting size:", err)
-		return err
+
+func (m *Mkdisk) Mkdisk(size int, fit byte, unit byte, path string) bool {
+	var fileSize = 0
+	var master datos.MBR
+	// Comprobando si existe una ruta valida para la creacion del disco
+	if path == "" {
+		consola.AddToConsole("no se encontro una ruta\n")
+		return false
+	}
+	// comprobando el tamano del disco, debe ser mayor que cero
+	if size <= 0 {
+		consola.AddToConsole("el tamano del disco debe ser mayor que 0\n")
+		return false
+	}
+	// tipo de unidad a utilizar, si el parametro esta vacio se utilizaran MegaBytes como default size
+	if unit == 'k' || unit == 'K' {
+		fileSize = size
+	} else if unit == 'm' || unit == 'M' {
+		fileSize = size * 1024
+	} else if unit == 0 {
+		fileSize = size * 1024
+	} else {
+		consola.AddToConsole("se debe ingresar una letra que corresponda un tamano valido\n")
+		return false
+	}
+	// definiendo el tipo de fit que el disco tendra, como default sera First Fit
+	//fmt.Printf("tipo de la variable fit %T\n", fit)
+	//fmt.Println("el fit es:", fit)
+	if strconv.Itoa(int(fit)) == "66" || string(fit) == "BF" {
+		master.Dsk_fit = 'b'
+	} else if strconv.Itoa(int(fit)) == "70" || string(fit) == "FF" {
+		master.Dsk_fit = 'f'
+	} else if strconv.Itoa(int(fit)) == "87" || string(fit) == "WF" {
+		master.Dsk_fit = 'w'
+	} else if fit == 0 {
+		master.Dsk_fit = 'f'
+	} else {
+		consola.AddToConsole("se debe ingresar un tipo de fit valido\n")
+		return false
+	}
+	// llenando el buffer con '0' para indicar que esta vacio.
+	bloque := make([]byte, 1024)
+	for i := 0; i < len(bloque); i++ {
+		bloque[i] = 0
 	}
 
-	// Crear el disco con el tamaño proporcionado
-	err = createDisk(mkdisk, sizeBytes)
+	iterator := 0
+	MkDirectory(path) // creando el directorio para el disco sino existe
+	binaryFile, err := os.Create(path)
 	if err != nil {
-		fmt.Println("Error creating disk:", err)
-		return err
+		consola.AddToConsole("error al crear el disco\n")
+		return false
 	}
-
-	// Crear el MBR con el tamaño proporcionado
-	err = createMBR(mkdisk, sizeBytes)
-	if err != nil {
-		fmt.Println("Error creating MBR:", err)
-		return err
-	}
-
-	return nil
-}
-
-func createDisk(mkdisk *MKDISK, sizeBytes int) error {
-	// Crear las carpetas necesarias
-	err := os.MkdirAll(filepath.Dir(mkdisk.path), os.ModePerm)
-	if err != nil {
-		fmt.Println("Error creating directories:", err)
-		return err
-	}
-
-	// Crear el archivo binario
-	file, err := os.Create(mkdisk.path)
-	if err != nil {
-		fmt.Println("Error creating file:", err)
-		return err
-	}
-	defer file.Close()
-
-	// Escribir en el archivo usando un buffer de 1 MB
-	buffer := make([]byte, 1024*1024) // Crea un buffer de 1 MB
-	for sizeBytes > 0 {
-		writeSize := len(buffer)
-		if sizeBytes < writeSize {
-			writeSize = sizeBytes // Ajusta el tamaño de escritura si es menor que el buffer
+	defer binaryFile.Close()
+	for iterator < fileSize {
+		_, err := binaryFile.Write(bloque[:])
+		if err != nil {
+			consola.AddToConsole("error al llenar el disco creado\n")
 		}
-		if _, err := file.Write(buffer[:writeSize]); err != nil {
-			return err // Devuelve un error si la escritura falla
-		}
-		sizeBytes -= writeSize // Resta el tamaño escrito del tamaño total
+		iterator++
 	}
-	return nil
+	master.Mbr_tamano = int64(fileSize * 1024)
+	master.Mbr_dsk_signature = GetRandom()
+	// formateando el tiempo
+	date := time.Now()
+	for i := 0; i < len(master.Mbr_fecha_creacion)-1; i++ {
+		master.Mbr_fecha_creacion[i] = date.String()[i]
+	}
+	FillPartitions(&master)
+	WriteMBR(&master, path)
+	return true
 }
 
-func createMBR(mkdisk *MKDISK, sizeBytes int) error {
-	// Seleccionar el tipo de ajuste
-	var fitByte byte
-	switch mkdisk.fit {
-	case "FF":
-		fitByte = 'F'
-	case "BF":
-		fitByte = 'B'
-	case "WF":
-		fitByte = 'W'
-	default:
-		fmt.Println("Invalid fit type")
-		return nil
+func FillPartitions(master *datos.MBR) {
+	for i := 0; i < len(master.Mbr_partitions); i++ {
+		master.Mbr_partitions[i].Part_status = '0'
+		master.Mbr_partitions[i].Part_fit = '0'
+		master.Mbr_partitions[i].Part_start = 0
+		master.Mbr_partitions[i].Part_size = 0
+		master.Mbr_partitions[i].Part_type = '0'
+		copy(master.Mbr_partitions[i].Part_name[:], "")
 	}
-
-	// Crear el MBR con los valores proporcionados
-	mbr := &structures.MBR{
-		Mbr_size:           int32(sizeBytes),
-		Mbr_creation_date:  float32(time.Now().Unix()),
-		Mbr_disk_signature: rand.Int31(),
-		Mbr_disk_fit:       [1]byte{fitByte},
-		Mbr_partitions: [4]structures.PARTITION{
-			// Inicializó todos los char en N y los enteros en -1 para que se puedan apreciar en el archivo binario.
-
-			{Part_status: [1]byte{'N'}, Part_type: [1]byte{'N'}, Part_fit: [1]byte{'N'}, Part_start: -1, Part_size: -1, Part_name: [16]byte{'N'}, Part_correlative: -1, Part_id: [4]byte{'N'}},
-			{Part_status: [1]byte{'N'}, Part_type: [1]byte{'N'}, Part_fit: [1]byte{'N'}, Part_start: -1, Part_size: -1, Part_name: [16]byte{'N'}, Part_correlative: -1, Part_id: [4]byte{'N'}},
-			{Part_status: [1]byte{'N'}, Part_type: [1]byte{'N'}, Part_fit: [1]byte{'N'}, Part_start: -1, Part_size: -1, Part_name: [16]byte{'N'}, Part_correlative: -1, Part_id: [4]byte{'N'}},
-			{Part_status: [1]byte{'N'}, Part_type: [1]byte{'N'}, Part_fit: [1]byte{'N'}, Part_start: -1, Part_size: -1, Part_name: [16]byte{'N'}, Part_correlative: -1, Part_id: [4]byte{'N'}},
-		},
-	}
-
-	/* SOLO PARA VERIFICACIÓN */
-	// Imprimir MBR
-	fmt.Println("\nMBR creado:")
-	mbr.PrintMBR()
-
-	// Serializar el MBR en el archivo
-	err := mbr.SerializeMBR(mkdisk.path)
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-
-	return nil
 }

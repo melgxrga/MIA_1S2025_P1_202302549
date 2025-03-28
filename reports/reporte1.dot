@@ -1,0 +1,31 @@
+digraph {
+	node [shape=plaintext]
+	table [label=<
+		<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+			<TR><TD bgcolor="purple" COLSPAN="2"> REPORTE MBR</TD></TR>
+			<TR><TD> mbr_tamano </TD><TD>3145728000</TD></TR>
+			<TR><TD bgcolor="#D3D3FA"> mbr_fecha_creacion </TD><TD bgcolor="#D3D3FA">2025-03-20 18:53:33</TD></TR>
+			<TR><TD> mbr_tamano </TD><TD>23</TD></TR>
+			<TR><TD bgcolor="purple" COLSPAN="2">Particion</TD></TR>
+			<TR><TD> part_status </TD><TD>1</TD></TR>
+			<TR><TD bgcolor="#D3D3FA"> part_type </TD><TD bgcolor="#D3D3FA">P</TD></TR>
+			<TR><TD> part_fit </TD><TD>f</TD></TR>
+			<TR><TD bgcolor="#D3D3FA"> part_start </TD><TD bgcolor="#D3D3FA">208</TD></TR>
+			<TR><TD> part_size </TD><TD>160432128</TD></TR>
+			<TR><TD bgcolor="#D3D3FA"> part_name </TD><TD bgcolor="#D3D3FA">ParticionPrimari</TD></TR>
+			<TR><TD bgcolor="purple" COLSPAN="2">Particion</TD></TR>
+			<TR><TD> part_status </TD><TD>1</TD></TR>
+			<TR><TD bgcolor="#D3D3FA"> part_type </TD><TD bgcolor="#D3D3FA">E</TD></TR>
+			<TR><TD> part_fit </TD><TD>f</TD></TR>
+			<TR><TD bgcolor="#D3D3FA"> part_start </TD><TD bgcolor="#D3D3FA">160432336</TD></TR>
+			<TR><TD> part_size </TD><TD>157286400</TD></TR>
+			<TR><TD bgcolor="#D3D3FA"> part_name </TD><TD bgcolor="#D3D3FA">Particion1</TD></TR>
+			<TR><TD bgcolor="pink" COLSPAN="2">Particion Logica</TD></TR>
+			<TR><TD> part_status </TD><TD>1</TD></TR>
+			<TR><TD> part_fit </TD><TD>f</TD></TR>
+			<TR><TD bgcolor="#D3D3D3"> part_start </TD><TD bgcolor="#D3D3D3">160432336</TD></TR>
+			<TR><TD> part_size </TD><TD>1048576</TD></TR>
+			<TR><TD bgcolor="#D3D3D3"> part_name </TD><TD bgcolor="#D3D3D3">ParticionLogica</TD></TR>
+		</TABLE>
+	>]
+}

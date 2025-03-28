@@ -1,553 +1,382 @@
-package commands
+package comandos
 
 import (
-	structures "CLASE03/structures"
-	utils "CLASE03/utils"
 	"bytes"
-	"encoding/binary"
-	"errors" // Paquete para manejar errores y crear nuevos errores con mensajes personalizados
-	"fmt"    // Paquete para formatear cadenas y realizar operaciones de entrada/salida
-	"os"
+	"fmt"
+	"github.com/melgxrga/proyecto1Archivos/consola"
+	"github.com/melgxrga/proyecto1Archivos/functions"
+	"github.com/melgxrga/proyecto1Archivos/structures"
+	"strconv"
+	"strings"
+	"unsafe"
 	"regexp"  // Paquete para trabajar con expresiones regulares, útil para encontrar y manipular patrones en cadenas
-	"strconv" // Paquete para convertir cadenas a otros tipos de datos, como enteros
-	"strings" // Paquete para manipular cadenas, como unir, dividir, y modificar contenido de cadenas
 )
 
-// FDISK estructura que representa el comando fdisk con sus parámetros
-type FDISK struct {
-	size int    // Tamaño de la partición
-	unit string // Unidad de medida del tamaño (K o M)
-	fit  string // Tipo de ajuste (BF, FF, WF)
-	path string // Ruta del archivo del disco
-	typ  string // Tipo de partición (P, E, L)
-	name string // Nombre de la partición
+type ParametrosFdisk struct {
+	Size int
+	Unit byte
+	Path string
+	Type byte
+	Fit  byte
+	Name [16]byte
 }
 
-/*
-	fdisk -size=1 -type=L -unit=M -fit=BF -name="Particion3" -path="/home/keviin/University/PRACTICAS/MIA_LAB_S2_2024/CLASEEXTRA/disks/Disco1.mia"
-	fdisk -size=300 -path=/home/Disco1.mia -name=Particion1
-	fdisk -type=E -path=/home/Disco2.mia -Unit=K -name=Particion2 -size=300
-*/
+type Fdisk struct {
+	Params ParametrosFdisk
+}
 
-// CommandFdisk parsea el comando fdisk y devuelve una instancia de FDISK
-func ParseFdisk(tokens []string) (*FDISK, error) {
-	cmd := &FDISK{} // Crea una nueva instancia de FDISK
+func (f *Fdisk) Exe(parametros []string) {
+	f.Params = f.SaveParams(parametros)
+	if f.Fdisk(f.Params.Name, f.Params.Path, f.Params.Size, f.Params.Unit, f.Params.Fit, f.Params.Type) {
+		consola.AddToConsole(fmt.Sprintf("\nfdisk realizado con exito para la ruta: %s y particion: %s\n\n", f.Params.Path, string(f.Params.Name[:])))
+	} else {
+		consola.AddToConsole(fmt.Sprintf("\n[ERROR!] no se logro realizar el comando fdisk para la ruta: %s\n\n", f.Params.Path))
+	}
+}
+func (f *Fdisk) SaveParams(parametros []string) ParametrosFdisk {
+	var params ParametrosFdisk
+	// Unir todos los parámetros en una sola cadena
+	args := strings.Join(parametros, " ")
 
-	// Unir tokens en una sola cadena y luego dividir por espacios, respetando las comillas
-	args := strings.Join(tokens, " ")
-	// Expresión regular para encontrar los parámetros del comando fdisk
-	re := regexp.MustCompile(`-size=\d+|-unit=[kKmM]|-fit=[bBfF]{2}|-path="[^"]+"|-path=[^\s]+|-type=[pPeElL]|-name="[^"]+"|-name=[^\s]+`)
-	// Encuentra todas las coincidencias de la expresión regular en la cadena de argumentos
+	// Expresión regular para capturar los parámetros
+	re := regexp.MustCompile(`-size=\d+|-unit=[kKmM]|-fit=[bBfFwW]{2}|-path="[^"]+"|-path=[^\s]+|-type=[pPeElL]|-name="[^"]+"|-name=[^\s]+`)
 	matches := re.FindAllString(args, -1)
 
-	// Itera sobre cada coincidencia encontrada
+	// Iterar sobre cada coincidencia
 	for _, match := range matches {
-		// Divide cada parte en clave y valor usando "=" como delimitador
 		kv := strings.SplitN(match, "=", 2)
 		if len(kv) != 2 {
-			return nil, fmt.Errorf("formato de parámetro inválido: %s", match)
+			fmt.Printf("Formato de parámetro inválido: %s\n", match)
+			continue
 		}
 		key, value := strings.ToLower(kv[0]), kv[1]
 
-		// Remove quotes from value if present
+		// Quitar comillas si las tiene
 		if strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
 			value = strings.Trim(value, "\"")
 		}
 
-		// Switch para manejar diferentes parámetros
+		// Procesar según el parámetro encontrado
 		switch key {
 		case "-size":
-			// Convierte el valor del tamaño a un entero
 			size, err := strconv.Atoi(value)
 			if err != nil || size <= 0 {
-				return nil, errors.New("el tamaño debe ser un número entero positivo")
+				fmt.Println("Error: el tamaño debe ser un número entero positivo")
+				continue
 			}
-			cmd.size = size
+			params.Size = size
 		case "-unit":
-			// Verifica que la unidad sea "K" o "M"
+			value = strings.ToUpper(value)
 			if value != "K" && value != "M" {
-				return nil, errors.New("la unidad debe ser K o M")
+				fmt.Println("Error: la unidad debe ser K o M")
+				continue
 			}
-			cmd.unit = strings.ToUpper(value)
+			params.Unit = value[0]  // Asignar el primer caracter
 		case "-fit":
-			// Verifica que el ajuste sea "BF", "FF" o "WF"
 			value = strings.ToUpper(value)
 			if value != "BF" && value != "FF" && value != "WF" {
-				return nil, errors.New("el ajuste debe ser BF, FF o WF")
+				fmt.Println("Error: el ajuste debe ser BF, FF o WF")
+				continue
 			}
-			cmd.fit = value
+			params.Fit = value[0]  // Asignar el primer caracter
 		case "-path":
-			// Verifica que el path no esté vacío
 			if value == "" {
-				return nil, errors.New("el path no puede estar vacío")
+				fmt.Println("Error: el path no puede estar vacío")
+				continue
 			}
-			cmd.path = value
+			params.Path = value
 		case "-type":
-			// Verifica que el tipo sea "P", "E" o "L"
 			value = strings.ToUpper(value)
 			if value != "P" && value != "E" && value != "L" {
-				return nil, errors.New("el tipo debe ser P, E o L")
+				fmt.Println("Error: el tipo debe ser P, E o L")
+				continue
 			}
-			cmd.typ = value
+			params.Type = value[0]  // Asignar el primer caracter
 		case "-name":
-			// Verifica que el nombre no esté vacío
 			if value == "" {
-				return nil, errors.New("el nombre no puede estar vacío")
+				fmt.Println("Error: el nombre no puede estar vacío")
+				continue
 			}
-			cmd.name = value
-		default:
-			// Si el parámetro no es reconocido, devuelve un error
-			return nil, fmt.Errorf("parámetro desconocido: %s", key)
+			copy(params.Name[:], value)
 		}
 	}
 
-	// Verifica que los parámetros -size, -path y -name hayan sido proporcionados
-	if cmd.size == 0 {
-		return nil, errors.New("faltan parámetros requeridos: -size")
+	// Validación final de los parámetros obligatorios
+	if params.Size == 0 {
+		fmt.Println("Error: Falta el parámetro obligatorio -size")
 	}
-	if cmd.path == "" {
-		return nil, errors.New("faltan parámetros requeridos: -path")
-	}
-	if cmd.name == "" {
-		return nil, errors.New("faltan parámetros requeridos: -name")
+	if params.Path == "" {
+		fmt.Println("Error: Falta el parámetro obligatorio -path")
 	}
 
-	// Si no se proporcionó la unidad, se establece por defecto a "M"
-	if cmd.unit == "" {
-		cmd.unit = "M"
+	// Valores por defecto si no se proporcionaron
+	if params.Unit == 0 {
+		params.Unit = 'M'
+	}
+	if params.Fit == 0 {
+		params.Fit = 'F' // Asignar un valor por defecto de tipo byte
+	}
+	if params.Type == 0 {
+		params.Type = 'P' // Asignar un valor por defecto de tipo byte
 	}
 
-	// Si no se proporcionó el ajuste, se establece por defecto a "FF"
-	if cmd.fit == "" {
-		cmd.fit = "WF"
-	}
-
-	// Si no se proporcionó el tipo, se establece por defecto a "P"
-	if cmd.typ == "" {
-		cmd.typ = "P"
-	}
-
-	// Crear la partición con los parámetros proporcionados
-	err := commandFdisk(cmd)
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-
-	return cmd, nil // Devuelve el comando FDISK creado
+	return params
 }
 
-func commandFdisk(fdisk *FDISK) error {
-	// Convertir el tamaño a bytes
-	sizeBytes, err := utils.ConvertToBytes(fdisk.size, fdisk.unit)
-	if err != nil {
-		fmt.Println("Error converting size:", err)
-		return err
-	}
 
-	if fdisk.typ == "P" {
-		// Crear partición primaria
-		err = createPrimaryPartition(fdisk, sizeBytes)
-		if err != nil {
-			fmt.Println("Error creando partición primaria:", err)
-			return err
+
+func (f *Fdisk) Fdisk(name [16]byte, path string, size int, unit byte, fit byte, t byte) bool {
+	if path == "" {
+		consola.AddToConsole("no se encontro una ruta\n")
+		return false
+	}
+	master := GetMBR(path)
+	newPartition := datos.Partition{}
+	fileSize := 0
+	// tipo de unidad a utilizar, si el parametro esta vacio se utilizaran Kilobytes como default size.
+	if unit == 'b' || unit == 'B' {
+		fileSize = size
+	} else if unit == 'k' || unit == 'K' {
+		fileSize = size * 1024
+	} else if unit == 'm' || unit == 'M' {
+		fileSize = size * 1024 * 1024
+	} else if unit == 0 {
+		fileSize = size * 1024
+	} else {
+		consola.AddToConsole("debe ingresar una letra de tamano correcta\n")
+		return false
+	}
+	if ExisteParticion(&master, name) {
+		consola.AddToConsole(fmt.Sprintf("ya existe una particion con nombre: \"%s\"\n", string(functions.TrimArray(name[:]))))
+		return false
+	}
+	if size <= 0 {
+		consola.AddToConsole("el tamano de la particion tiene que ser mayor a 0\n")
+		return false
+	}
+	if strconv.Itoa(int(fit)) == "87" || fit == 'W' {
+		newPartition.Part_fit = 'w'
+	} else if strconv.Itoa(int(fit)) == "66" || fit == 'B' {
+		newPartition.Part_fit = 'b'
+	} else if strconv.Itoa(int(fit)) == "70" || fit == 'F' {
+		newPartition.Part_fit = 'f'
+	} else if fit == 0 {
+		newPartition.Part_fit = 'w'
+	} else {
+		consola.AddToConsole("se debe ingresar un tipo de fit valido\n")
+		return false
+	}
+	// verificando que el tamano de la particion a crear sea menor
+	// o igual que el tamano que queda en el disco.
+	totalSize := int(unsafe.Sizeof(datos.MBR{}))
+	for _, v := range master.Mbr_partitions {
+		if v.Part_status == '1' {
+			totalSize += int(v.Part_size)
 		}
-	} else if fdisk.typ == "E" {
-		// Crear partición extendida
-		out, err := createExtendedPartition(fdisk, sizeBytes)
-		if err != nil {
-			fmt.Println("Error creando partición extendida:", err)
-			return err
-		}
-		fmt.Println(out)
-	} else if fdisk.typ == "L" {
-	      // Crear partición lógica
-	  	    out, err := createLogicalPartition(fdisk, sizeBytes)
-	      if err != nil {
-	          fmt.Println("Error creando partición lógica:", err)
-	          return err
-	      }
-	      fmt.Println(out)
-	  }
-
-	return nil
-}
-
-func createPrimaryPartition(fdisk *FDISK, sizeBytes int) error {
-	// Crear una instancia de MBR
-	var mbr structures.MBR
-
-	// Deserializar la estructura MBR desde un archivo binario
-	err := mbr.DeserializeMBR(fdisk.path)
-	if err != nil {
-		fmt.Println("Error deserializando el MBR:", err)
-		return err
 	}
-
-	fmt.Println("\nMBR original:")
-	mbr.PrintMBR()
-
-	// Obtener la primera partición disponible
-	availablePartition, startPartition, indexPartition := mbr.GetFirstAvailablePartition()
-	if availablePartition == nil {
-		fmt.Println("No hay particiones disponibles.")
-	}
-
-	/* SOLO PARA VERIFICACIÓN */
-	// Print para verificar que la partición esté disponible
-	fmt.Println("\nPartición disponible:")
-	availablePartition.PrintPartition()
-
-	// Crear la partición con los parámetros proporcionados
-	availablePartition.CreatePartition(startPartition, sizeBytes, fdisk.typ, fdisk.fit, fdisk.name)
-
-	// Print para verificar que la partición se haya creado correctamente
-	fmt.Println("\nPartición creada (modificada):")
-	availablePartition.PrintPartition()
-
-	// Colocar la partición en el MBR
-	if availablePartition != nil {
-		mbr.Mbr_partitions[indexPartition] = *availablePartition
-	}
-
-	// Imprimir las particiones del MBR
-	fmt.Println("\nParticiones del MBR:")
-	mbr.PrintPartitions()
-
-	// Serializar el MBR en el archivo binario
-	err = mbr.SerializeMBR(fdisk.path)
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-
-	return nil
-}
-func createExtendedPartition(fdisk *FDISK, sizeBytes int) (string, error) {
-	var mbr structures.MBR
-
-	// Deserializar el MBR desde disco
-	err := mbr.DeserializeMBR(fdisk.path)
-	if err != nil {
-		return "", fmt.Errorf("Error deserializando el MBR: %w", err)
-	}
-	// Verificar que no exista ya una partición extendida
-	for _, part := range mbr.Mbr_partitions {
-		if part.Part_type[0] == 'E' || part.Part_type[0] == 'e' {
-			return "", fmt.Errorf("Ya existe una partición extendida. No se puede crear otra")
+	// fmt.Println("espacio disponible, espacio a utilizar:", int(master.Mbr_tamano)-totalSize, fileSize)
+	if t != 'l' && t != 'L' {
+		if fileSize > int(master.Mbr_tamano)-int(totalSize) {
+			consola.AddToConsole("el tamano de la particion es mas grande que el disco\n")
+			return false
 		}
 	}
 
-	fmt.Println("\nMBR original:")
-	fmt.Printf("MBR Size: %d\n", mbr.Mbr_size)
-	fmt.Printf("Disk Signature: %d\n", mbr.Mbr_disk_signature)
-	fmt.Printf("Disk Fit: %c\n", mbr.Mbr_disk_fit[0])
+	// indicando el tipo de particion
+	if t == 0 {
+		t = 'p'
+	} else if t != 'p' && t != 'e' && t != 'l' && t != 'P' && t != 'E' && t != 'L' {
+		consola.AddToConsole(fmt.Sprintf("el tipo de la particion no es valido: \"%c\"\n", t))
+		return false
+	}
+	newPartition.Part_size = int64(fileSize)
+	newPartition.Part_type = t
+	newPartition.Part_status = '1'
+	copy(newPartition.Part_name[:], name[:])
 
-	// Buscar una partición libre para colocar la extendida
-	availablePartition, startPartition, indexPartition := mbr.GetFirstAvailablePartition()
-	if availablePartition == nil {
-		return "", errors.New("No hay particiones disponibles para crear la extendida")
+	// revisando que no exista mas de una particion Extendida y que Exista en caso de que se vaya a crear una particion logica
+	existeParticionExtendida := false //esta variable se utiliza para encontrar si existe una particion extendida
+	var whereToStart int              // con este valor le vamos a pasar a la particion logica donde comienza la particion extendida
+	var partitionSize int             // con este valor le indicamos a la particion logica cuanto espacio ocupa la particion extendida
+	var extendedFit byte              // con este valor le indicamos a la particion logica el tipo de ajuste que tiene la particion extendida
+	var extendedName [16]byte         // con este valor le indicamos el nombre de la particion extendida a la particion logica
+	// aqui le agregamos a las variables anteriores su correspondiente valor
+	for _, v := range master.Mbr_partitions {
+		if v.Part_type == 'e' || v.Part_type == 'E' {
+			copy(extendedName[:], v.Part_name[:])
+			existeParticionExtendida = true
+			extendedFit = v.Part_fit
+			whereToStart = int(v.Part_start)
+			partitionSize = int(v.Part_size)
+		}
 	}
 
-	fmt.Println("\nPartición disponible:")
-	fmt.Printf("Part_start: %d\n", availablePartition.Part_start)
-	fmt.Printf("Part_size: %d\n", availablePartition.Part_size)
-	fmt.Printf("Part_name: %s\n", string(availablePartition.Part_name[:]))
-	fmt.Printf("Part_correlative: %d\n", availablePartition.Part_correlative)
-	fmt.Printf("Part_id: %s\n", string(availablePartition.Part_id[:]))
-
-	// Crear la partición extendida con los parámetros proporcionados
-	availablePartition.CreatePartition(startPartition, sizeBytes, fdisk.typ, fdisk.fit, fdisk.name)
-
-	fmt.Println("\nPartición extendida creada:")
-	fmt.Printf("Part_status: %c\n", availablePartition.Part_status[0])
-	fmt.Printf("Part_type: %c\n", availablePartition.Part_type[0])
-	fmt.Printf("Part_fit: %c\n", availablePartition.Part_fit[0])
-	fmt.Printf("Part_start: %d\n", availablePartition.Part_start)
-	fmt.Printf("Part_size: %d\n", availablePartition.Part_size)
-	fmt.Printf("Part_name: %s\n", string(availablePartition.Part_name[:]))
-	fmt.Printf("Part_correlative: %d\n", availablePartition.Part_correlative)
-	fmt.Printf("Part_id: %s\n", string(availablePartition.Part_id[:]))
-
-	// Calcular la posición de inicio del EBR
-	ebrStart := availablePartition.Part_start
-
-	// Inicializar el EBR en la primera posición de la partición extendida
-	ebr := structures.EBR{
-		Part_status: '0',
-		Part_fit:    availablePartition.Part_fit[0],
-		Part_start:  ebrStart,
-		Part_next:   -1,
-		Part_size:   0,
+	// comprobamos que exista una particion libre
+	existeParticionLibre := false
+	if t != 'l' && t != 'L' {
+		for _, v := range master.Mbr_partitions {
+			if v.Part_status == '0' {
+				existeParticionLibre = true
+			}
+		}
+	} else if t == 'l' || t == 'L' {
+		existeParticionLibre = true
 	}
-	copy(ebr.Part_name[:], availablePartition.Part_name[:])
-
-	// Serializar el EBR en el archivo binario
-	err = ebr.SerializeEBR(fdisk.path, int64(ebrStart))
-	if err != nil {
-		return "", fmt.Errorf("Error serializando el EBR: %w", err)
+	// sino se encuentra un espacio libre para particion
+	if !existeParticionLibre {
+		consola.AddToConsole("no se encuentra ninguna particion libre para crear dentro del disco\n")
+		return false
 	}
+	// comprobamos que tipo de particion es, luego la creamos
+	if t == 'p' || t == 'P' {
+		f.CreatePrimaryPartition(&master, newPartition)
+	} else if t == 'e' || t == 'E' {
+		if existeParticionExtendida {
+			consola.AddToConsole("no puede haber mas de una particion extendida\n")
+			return false
+		}
+		f.CreateExtendedPartition(&master, newPartition, path)
+	} else if t == 'l' || t == 'L' {
+		if !existeParticionExtendida {
+			consola.AddToConsole("no existe una particion extendida para crear una particion logica\n")
+			return false
+		}
+		particionLogica := datos.EBR{}
+		particionLogica.Part_fit = newPartition.Part_fit
+		particionLogica.Part_next = -1
+		particionLogica.Part_size = newPartition.Part_size
+		particionLogica.Part_status = newPartition.Part_status
+		copy(particionLogica.Part_name[:], newPartition.Part_name[:])
+		// vamos a mandar que tipo de ajuste tiene la particion
+		// dentro de este metodo se le indica donde es que comienza la particion logica
+		return f.CreateLogicPartition(&particionLogica, path, whereToStart, partitionSize, extendedFit, extendedName)
 
-	fmt.Println("\nEBR inicializado en la partición extendida:")
-	fmt.Printf("Part_mount: %c\n", ebr.Part_status)
-	fmt.Printf("Part_fit: %c\n", ebr.Part_fit)
-	fmt.Printf("Part_start: %d\n", ebr.Part_start)
-	fmt.Printf("Part_next: %d\n", ebr.Part_next)
-	fmt.Printf("Part_size: %d\n", ebr.Part_size)
-	fmt.Printf("Part_name: %s\n", string(ebr.Part_name[:]))
-
-	// Colocar la partición en el MBR
-	mbr.Mbr_partitions[indexPartition] = *availablePartition
-
-	fmt.Println("\nParticiones del MBR:")
-	for i, partition := range mbr.Mbr_partitions {
-		fmt.Printf("Partition %d:\n", i+1)
-		fmt.Printf("  Part_status: %c\n", partition.Part_status[0])
-		fmt.Printf("  Part_type: %c\n", partition.Part_type[0])
-		fmt.Printf("  Part_fit: %c\n", partition.Part_fit[0])
-		fmt.Printf("  Part_start: %d\n", partition.Part_start)
-		fmt.Printf("  Part_size: %d\n", partition.Part_size)
-		fmt.Printf("  Part_name: %s\n", string(partition.Part_name[:]))
-		fmt.Printf("  Part_correlative: %d\n", partition.Part_correlative)
-		fmt.Printf("  Part_id: %s\n", string(partition.Part_id[:]))
 	}
-
-	// Serializar el MBR en el archivo binario
-	err = mbr.SerializeMBR(fdisk.path)
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-
-	return "", nil
+	WriteMBR(&master, path)
+	PrintPartitions(&master)
+	return true
 }
 
-// WriteEBR escribe la estructura EBR en el archivo ubicado en 'path' en la posición 'position'.
-// Se utiliza para registrar o actualizar el descriptor de la unidad lógica en disco.
-func WriteEBR(ebr *structures.EBR, path string, position int64) {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0644)
-	if err != nil {
-		fmt.Printf("no se pudo abrir el archivo para escribir el EBR %s\n", err.Error())
-		return
+func (f *Fdisk) CreatePrimaryPartition(master *datos.MBR, newPartition datos.Partition) {
+	// Asignacion de que particion es la que se utilizara
+	if master.Dsk_fit == 'b' {
+		BestFit(master, &newPartition)
+	} else if master.Dsk_fit == 'w' {
+		WorstFit(master, &newPartition)
+	} else if master.Dsk_fit == 'f' {
+		FirstFit(master, &newPartition)
 	}
-	// Posicionandonos en la posición especificada del archivo
-	_, err = file.Seek(position, 0)
-	if err != nil {
-		fmt.Printf("no se pudo posicionar en la posición especificada del archivo %s\n", err.Error())
-		return
-	}
-	// Escribiendo el EBR
-	err = binary.Write(file, binary.LittleEndian, ebr)
-	if err != nil {
-		fmt.Printf("no se pudo escribir el EBR %s\n", err.Error())
-		file.Close()
-		return
-	}
-	fmt.Println("EBR escrito correctamente")
-	defer file.Close()
 }
 
-func ReadEBR(path string, position int64) *structures.EBR {
-	var ebr *structures.EBR
-	file, err := os.Open(path)
-	if err != nil {
-		fmt.Printf("no se pudo Abrir el archivo que contiene el EBR %s\n", err.Error())
-		return ebr
+func (f Fdisk) CreateExtendedPartition(master *datos.MBR, newPartition datos.Partition, path string) {
+	// Asignacion de que particion es la que se utilizara
+	if master.Dsk_fit == 'b' {
+		BestFit(master, &newPartition)
+	} else if master.Dsk_fit == 'w' {
+		WorstFit(master, &newPartition)
+	} else if master.Dsk_fit == 'f' {
+		FirstFit(master, &newPartition)
 	}
+	temp := datos.EBR{}
+	temp.Part_status = '0'
+	temp.Part_fit = '0'
+	temp.Part_start = newPartition.Part_start
+	temp.Part_size = 0
+	temp.Part_next = -1
+	copy(temp.Part_name[:], "vacio")
+	WriteEBR(&temp, path, newPartition.Part_start)
+}
 
-	defer file.Close()
-
-	// leyendo el mbr del archivo
-	file.Seek(position, 0)
-	err = binary.Read(file, binary.LittleEndian, &ebr)
-	if err != nil {
-		fmt.Printf("no se pudo obtener la informacion del archivo para obtener el EBR %s\n", err.Error())
-		return ebr
+func BestFit(master *datos.MBR, newPartition *datos.Partition) {
+	bestFit := 0
+	// para encontrar el mejor fit lo primero que hay que hacer
+	// es recorrer la lista de particiones y verificar que exista
+	// una particion disponible, si esta particion se encuentra
+	// disponible se comprobara que el tamano de esta sea mayor o
+	// igual al tamano de la particion que estamos creando. de ser
+	// asi, le asignaremos esa posicion, luego seguir iterando para
+	// buscar si existe alguna particion con menor cantidad de espacio
+	// donde se ajuste la particion que estamos creando.
+	encontroParticion := false
+	for i, v := range master.Mbr_partitions {
+		if v.Part_status == '5' && v.Part_size >= newPartition.Part_size {
+			if i != bestFit {
+				if v.Part_size < master.Mbr_partitions[bestFit].Part_size {
+					encontroParticion = true
+					bestFit = i
+				}
+			}
+		}
 	}
-	return ebr
+	if !encontroParticion {
+		for i, v := range master.Mbr_partitions {
+			if v.Part_start == 0 {
+				bestFit = i
+				break
+			}
+		}
+	}
+	master.Mbr_partitions[bestFit] = *newPartition
+	if bestFit == 0 {
+		master.Mbr_partitions[bestFit].Part_start = int64(unsafe.Sizeof(datos.MBR{}))
+		newPartition.Part_start = int64(unsafe.Sizeof(datos.MBR{}))
+	} else {
+		master.Mbr_partitions[bestFit].Part_start = master.Mbr_partitions[bestFit-1].Part_start + master.Mbr_partitions[bestFit-1].Part_size
+		newPartition.Part_start = master.Mbr_partitions[bestFit-1].Part_start + master.Mbr_partitions[bestFit-1].Part_size
+	}
 }
 
-func connectLogicalEBRs(path string, extendedStart int, newEBRPos int32) error {
-    var currentEBR structures.EBR
-    currentOffset := int64(extendedStart)
-    
-    fmt.Println("DEBUG: Iniciando el recorrido de EBRs en offset", currentOffset)
-    Fread(&currentEBR, path, currentOffset)
-
-    // Si el primer EBR está vacío, no es necesario actualizar ningún puntero.
-    if currentEBR.Part_size == 0 {
-        fmt.Println("DEBUG: Primer EBR está vacío, sin partición lógica definida.")
-        return nil
-    }
-
-    // Recorremos la lista enlazada de EBRs hasta llegar al último (donde Part_next == -1)
-    for currentEBR.Part_next != -1 {
-        fmt.Printf("DEBUG: EBR en offset %d -> Nombre: %s, Part_next: %d, Part_size: %d\n",
-            currentOffset, string(currentEBR.Part_name[:]), currentEBR.Part_next, currentEBR.Part_size)
-        currentOffset = int64(currentEBR.Part_next)
-        Fread(&currentEBR, path, currentOffset)
-    }
-
-    // Debug: Mostrar el último EBR encontrado
-    fmt.Printf("DEBUG: Último EBR en offset %d -> Nombre: %s, Part_next: %d, Part_size: %d\n",
-        currentOffset, string(currentEBR.Part_name[:]), currentEBR.Part_next, currentEBR.Part_size)
-
-    // Actualizamos el Part_next para apuntar a newEBRPos.
-    currentEBR.Part_next = newEBRPos
-    fmt.Printf("DEBUG: Actualizando EBR en offset %d con nuevo Part_next: %d\n", currentOffset, newEBRPos)
-
-    // Escribimos el EBR actualizado en el offset donde se leyó (currentOffset).
-    WriteEBR(&currentEBR, path, currentOffset)
-    return nil
+func WorstFit(master *datos.MBR, newPartition *datos.Partition) {
+	worstFit := 0
+	encontroParticion := false
+	for i, v := range master.Mbr_partitions {
+		if v.Part_status == '5' && v.Part_size >= newPartition.Part_size {
+			if i != worstFit {
+				if v.Part_size > master.Mbr_partitions[worstFit].Part_size {
+					worstFit = i
+					encontroParticion = true
+				}
+			}
+		}
+	}
+	if !encontroParticion {
+		for i, v := range master.Mbr_partitions {
+			fmt.Println(v.Part_start)
+			if v.Part_start == 0 {
+				worstFit = i
+				break
+			}
+		}
+	}
+	master.Mbr_partitions[worstFit] = *newPartition
+	if worstFit == 0 {
+		master.Mbr_partitions[worstFit].Part_start = int64(unsafe.Sizeof(datos.MBR{}))
+		newPartition.Part_start = int64(unsafe.Sizeof(datos.MBR{}))
+	} else {
+		master.Mbr_partitions[worstFit].Part_start = master.Mbr_partitions[worstFit-1].Part_start + master.Mbr_partitions[worstFit-1].Part_size
+		newPartition.Part_start = master.Mbr_partitions[worstFit-1].Part_start + master.Mbr_partitions[worstFit-1].Part_size
+	}
 }
 
-func createLogicalPartition(fdisk *FDISK, sizeBytes int) (string, error) {
-    var mbr structures.MBR
-
-    // Deserializar el MBR desde disco
-    err := mbr.DeserializeMBR(fdisk.path)
-    if err != nil {
-        return "", fmt.Errorf("Error deserializando el MBR: %w", err)
-    }
-
-    // Buscar la partición extendida en el MBR
-    var extendedFound bool
-    var whereToStart int
-    var extendedFit byte
-    var extendedName [16]byte
-    for _, part := range mbr.Mbr_partitions {
-        if part.Part_type[0] == 'E' || part.Part_type[0] == 'e' {
-            extendedFound = true
-            whereToStart = int(part.Part_start)
-            extendedFit = part.Part_fit[0]
-            copy(extendedName[:], part.Part_name[:])
-            break
-        }
-    }
-    if !extendedFound {
-        return "", errors.New("No existe una partición extendida para crear una partición lógica")
-    }
-
-    // Imprimir MBR original
-    fmt.Println("\nMBR original:")
-    fmt.Printf("MBR Size: %d\n", mbr.Mbr_size)
-    fmt.Printf("Disk Signature: %d\n", mbr.Mbr_disk_signature)
-    fmt.Printf("Disk Fit: %c\n", mbr.Mbr_disk_fit[0])
-    for i, partition := range mbr.Mbr_partitions {
-        fmt.Printf("Partition %d:\n", i+1)
-        fmt.Printf("  Part_status: %c\n", partition.Part_status[0])
-        fmt.Printf("  Part_type: %c\n", partition.Part_type[0])
-        fmt.Printf("  Part_fit: %c\n", partition.Part_fit[0])
-        fmt.Printf("  Part_start: %d\n", partition.Part_start)
-        fmt.Printf("  Part_size: %d\n", partition.Part_size)
-        fmt.Printf("  Part_name: %s\n", string(partition.Part_name[:]))
-        fmt.Printf("  Part_correlative: %d\n", partition.Part_correlative)
-        fmt.Printf("  Part_id: %s\n", string(partition.Part_id[:]))
-    }
-
-    // Leer el primer EBR de la partición extendida (en whereToStart)
-    var firstEBR structures.EBR
-    Fread(&firstEBR, fdisk.path, int64(whereToStart))
-
-    var logicPartitionStart int32
-    // Si el primer EBR está vacío, usaremos esa posición para la primera partición lógica.
-    if firstEBR.Part_size == 0 {
-        logicPartitionStart = int32(whereToStart)
-    } else {
-        // Recorrer la cadena de EBR para hallar el último.
-        tempEBR := firstEBR
-        for tempEBR.Part_next != -1 {
-            Fread(&tempEBR, fdisk.path, int64(tempEBR.Part_next))
-        }
-        // Se calcula el offset para el nuevo EBR inmediatamente después del último.
-        logicPartitionStart = tempEBR.Part_start + tempEBR.Part_size + int32(binary.Size(tempEBR))
-        // Conecta el último EBR al nuevo mediante la función auxiliar.
-        err = connectLogicalEBRs(fdisk.path, whereToStart, logicPartitionStart)
-        if err != nil {
-            return "", fmt.Errorf("Error conectando particiones lógicas: %w", err)
-        }
-    }
-
-    // Construir el EBR para la nueva partición lógica.
-    logicPartition := structures.EBR{
-        Part_status: '1',
-        Part_fit:    extendedFit,
-        Part_next:   -1,
-        Part_size:   int32(sizeBytes),
-        Part_start:  logicPartitionStart,
-    }
-    copy(logicPartition.Part_name[:], []byte(fdisk.name))
-
-    // Escribir el nuevo EBR en disco.
-    WriteEBR(&logicPartition, fdisk.path, int64(logicPartitionStart))
-
-    fmt.Println("\nPartición lógica creada:")
-    fmt.Printf("Part_fit: %c\n", logicPartition.Part_fit)
-    fmt.Printf("Part_next: %d\n", logicPartition.Part_next)
-    fmt.Printf("Part_size: %d\n", logicPartition.Part_size)
-    fmt.Printf("Part_status: %c\n", logicPartition.Part_status)
-    fmt.Printf("Part_name: %s\n", string(logicPartition.Part_name[:]))
-
-    // Serializar el MBR si fuese necesario.
-    err = mbr.SerializeMBR(fdisk.path)
-    if err != nil {
-        fmt.Println("Error:", err)
-    }
-
-    // Imprimir detalles de la partición extendida y sus particiones lógicas
-    PrintExtendedPartitionDetails(fdisk.path, int64(whereToStart))
-
-    return "", nil
-}
-// Actualizamos la función de impresión para recorrer la lista enlazada de EBRs
-// y mostrar los datos de cada EBR (que representan las particiones lógicas) de forma secuencial.
-func PrintExtendedPartitionDetails(path string, extendedStart int64) {
-    var mbr structures.MBR
-    err := mbr.DeserializeMBR(path)
-    if err != nil {
-        fmt.Println("Error deserializando el MBR:", err)
-        return
-    }
-
-    // Buscar la partición extendida en el MBR para obtener los datos correctos
-    var extendedPartition structures.PARTITION
-    for _, part := range mbr.Mbr_partitions {
-        if part.Part_type[0] == 'E' || part.Part_type[0] == 'e' {
-            extendedPartition = part
-            break
-        }
-    }
-
-    fmt.Println("\nDetalles de la partición extendida:")
-    fmt.Printf("Nombre: %s\n", string(extendedPartition.Part_name[:]))
-    fmt.Printf("Tamaño: %d\n", extendedPartition.Part_size)
-    fmt.Printf("Inicio: %d\n", extendedPartition.Part_start)
-
-    fmt.Println("\nParticiones lógicas dentro de la partición extendida:")
-    fmt.Println("----------------------------------------------------------------------")
-    fmt.Printf("%-20s %-10s %-10s %-10s %-10s %-10s\n", "Name", "Next Part", "Fit", "Start", "Size", "Status")
-    fmt.Println("----------------------------------------------------------------------")
-
-    // Leer el primer EBR (al inicio de la partición extendida)
-    var ebr structures.EBR
-    Fread(&ebr, path, int64(extendedPartition.Part_start))
-    for {
-        // Solo mostrar si la partición lógica tiene tamaño definido
-        if ebr.Part_size > 0 {
-            fmt.Printf("%-20s %-10d %-10c %-10d %-10d %-10c\n",
-                string(ebr.Part_name[:]),
-                ebr.Part_next,
-                ebr.Part_fit,
-                ebr.Part_start,
-                ebr.Part_size,
-                ebr.Part_status)
-        }
-        if ebr.Part_next == -1 {
-            break
-        }
-        Fread(&ebr, path, int64(ebr.Part_next))
-    }
-    fmt.Println("----------------------------------------------------------------------")
+func FirstFit(master *datos.MBR, newPartition *datos.Partition) {
+	firstFit := 0
+	for i, v := range master.Mbr_partitions {
+		if v.Part_status == '5' && v.Part_size >= newPartition.Part_size || v.Part_start == 0 {
+			firstFit = i
+			break
+		}
+	}
+	master.Mbr_partitions[firstFit] = *newPartition
+	if firstFit == 0 {
+		master.Mbr_partitions[firstFit].Part_start = int64(unsafe.Sizeof(datos.MBR{}))
+		newPartition.Part_start = int64(unsafe.Sizeof(datos.MBR{}))
+	} else {
+		master.Mbr_partitions[firstFit].Part_start = master.Mbr_partitions[firstFit-1].Part_start + master.Mbr_partitions[firstFit-1].Part_size
+		newPartition.Part_start = master.Mbr_partitions[firstFit-1].Part_start + master.Mbr_partitions[firstFit-1].Part_size
+	}
 }
 
-func (fdisk  *FDISK) CreateLogicPartition(logicPartition  *structures.EBR, path string, whereToStart int, partitionSize int, extendedFit byte, extendedName [16]byte) bool {
+func (f *Fdisk) CreateLogicPartition(logicPartition *datos.EBR, path string, whereToStart int, partitionSize int, extendedFit byte, extendedName [16]byte) bool {
 	if extendedFit == 'f' {
 		return FirstFitLogicPart(logicPartition, path, whereToStart, partitionSize, extendedName)
 	} else if extendedFit == 'b' {
@@ -558,187 +387,190 @@ func (fdisk  *FDISK) CreateLogicPartition(logicPartition  *structures.EBR, path 
 	return false
 }
 
-func FirstFitLogicPart(logicPartition *structures.EBR, path string, whereToStart int, partitionSize int, extendedName [16]byte) bool {
-    var temp structures.EBR
-    totalSize := 0
-    totalSize += int(logicPartition.Part_size)
-    temp = *ReadEBR(path, int64(whereToStart))
-    flag := true
-    for flag {
-        if temp.Part_size == 0 {
-            if partitionSize < int(logicPartition.Part_size) {
-                fmt.Println("la particion logica es mas grande que la extendida")
-                return false
-            }
-            logicPartition.Part_start = int32(whereToStart)
-            WriteEBR(logicPartition, path, int64(whereToStart))
-            flag = false
-        } else if temp.Part_status == '5' {
-            if temp.Part_size >= logicPartition.Part_size {
-                logicPartition.Part_start = temp.Part_start
-                logicPartition.Part_next = temp.Part_next
-                WriteEBR(logicPartition, path, int64(temp.Part_start))
-                flag = false
-            }
-        } else if temp.Part_next == -1 {
-            totalSize += int(temp.Part_size)
-            if partitionSize < totalSize {
-                fmt.Println("el tamano de todas las particiones logicas unidas son mas grandes que la particion extendida, espacio insuficiente")
-                return false
-            }
-            temp.Part_next = temp.Part_start + temp.Part_size
-            logicPartition.Part_start = temp.Part_next
-            WriteEBR(&temp, path, int64(temp.Part_start))
-            WriteEBR(logicPartition, path, int64(temp.Part_next))
-            flag = false
-        } else {
-            totalSize += int(temp.Part_size)
-            temp = *ReadEBR(path, int64(temp.Part_next))
-        }
-    }
-    // aquí debería ir un print a la consola
-    PrintLogicPartitions(path, int64(whereToStart), int64(partitionSize), extendedName)
-    return true
+func FirstFitLogicPart(logicPartition *datos.EBR, path string, whereToStart int, partitionSize int, extendedName [16]byte) bool {
+	temp := datos.EBR{}
+	totalSize := 0
+	totalSize += int(logicPartition.Part_size)
+	temp = ReadEBR(path, int64(whereToStart))
+	flag := true
+	for flag {
+		if temp.Part_size == 0 {
+			if partitionSize < int(logicPartition.Part_size) {
+				fmt.Println("la particion logica es mas grande que la extendida")
+				return false
+			}
+			logicPartition.Part_start = int64(whereToStart)
+			WriteEBR(logicPartition, path, int64(whereToStart))
+			flag = false
+		} else if temp.Part_status == '5' {
+			if temp.Part_size >= logicPartition.Part_size {
+				logicPartition.Part_start = temp.Part_start
+				logicPartition.Part_next = temp.Part_next
+				WriteEBR(logicPartition, path, temp.Part_start)
+				flag = false
+			}
+		} else if temp.Part_next == -1 {
+			totalSize += int(temp.Part_size)
+			if partitionSize < totalSize {
+				fmt.Println("el tamano de todas las particiones logicas unidas son mas grandes que la particion extendida, espacio insuficiente")
+				return false
+			}
+			temp.Part_next = temp.Part_start + temp.Part_size
+			logicPartition.Part_start = temp.Part_next
+			WriteEBR(&temp, path, temp.Part_start)
+			WriteEBR(logicPartition, path, temp.Part_next)
+			flag = false
+		} else {
+			totalSize += int(temp.Part_size)
+			temp = ReadEBR(path, temp.Part_next)
+		}
+	}
+	// aqui deberia ir un print a la consola
+	PrintLogicPartitions(path, int64(whereToStart), int64(partitionSize), extendedName)
+	return true
 }
 
-func BestFitLogicPart(logicPartition *structures.EBR, path string, whereToStart int, partitionSize int, extendedName [16]byte) bool {
-    var particionesLogicas []structures.EBR
-    var temp structures.EBR
-    totalSize := 0
-    totalSize += int(logicPartition.Part_size)
-    temp = *ReadEBR(path, int64(whereToStart))
-    Wrote := false
-    flag := true
-    for flag {
-        if temp.Part_size == 0 {
-            if partitionSize < int(logicPartition.Part_size) {
-                fmt.Println("la particion logica es mas grande que la extendida")
-                return false
-            }
-            logicPartition.Part_start = int32(whereToStart)
-            WriteEBR(logicPartition, path, int64(whereToStart))
-            flag = false
-            Wrote = true
-        } else if temp.Part_status == '5' {
-            particionesLogicas = append(particionesLogicas, temp)
-        } else if temp.Part_next == -1 {
-            flag = false
-        } else {
-            totalSize += int(temp.Part_size)
-            temp = *ReadEBR(path, int64(temp.Part_next))
-        }
-    }
-    bestFit := 0
-    tempSize := 0
-    if len(particionesLogicas) != 0 {
-        for i, v := range particionesLogicas {
-            if tempSize == 0 || (tempSize > int(v.Part_size) && v.Part_size >= logicPartition.Part_size) {
-                tempSize = int(v.Part_size)
-                bestFit = i
-            }
-        }
-        logicPartition.Part_start = particionesLogicas[bestFit].Part_start
-        logicPartition.Part_next = particionesLogicas[bestFit].Part_next
-        WriteEBR(logicPartition, path, int64(logicPartition.Part_start))
-        Wrote = true
-    }
-    if !Wrote {
-        totalSize = int(logicPartition.Part_size)
-        temp = *ReadEBR(path, int64(whereToStart))
-        flag2 := true
-        for flag2 {
-            if temp.Part_next == -1 {
-                totalSize += int(temp.Part_size)
-                if partitionSize < totalSize {
-                    fmt.Println("el tamano de todas las particiones logicas unidas son mas grandes que la particion extendida, espacio insuficiente")
-                    return false
-                }
-                temp.Part_next = temp.Part_start + temp.Part_size
-                logicPartition.Part_start = temp.Part_next
-                WriteEBR(&temp, path, int64(temp.Part_start))
-                WriteEBR(logicPartition, path, int64(temp.Part_next))
-                flag2 = false
-            } else {
-                totalSize += int(temp.Part_size)
-                temp = *ReadEBR(path, int64(temp.Part_next))
-            }
-        }
-    }
-    // aquí debería ir un print a la consola
-    PrintLogicPartitions(path, int64(whereToStart), int64(partitionSize), extendedName)
-    return true
+func BestFitLogicPart(logicPartition *datos.EBR, path string, whereToStart int, partitionSize int, extendedName [16]byte) bool {
+	var particionesLogicas []datos.EBR
+	temp := datos.EBR{}
+	totalSize := 0
+	totalSize += int(logicPartition.Part_size)
+	temp = ReadEBR(path, int64(whereToStart))
+	Wrote := false
+	flag := true
+	for flag {
+		if temp.Part_size == 0 {
+			if partitionSize < int(logicPartition.Part_size) {
+				fmt.Println("la particion logica es mas grande que la extendida")
+				return false
+			}
+			logicPartition.Part_start = int64(whereToStart)
+			WriteEBR(logicPartition, path, int64(whereToStart))
+			flag = false
+			Wrote = true
+		} else if temp.Part_status == '5' {
+			particionesLogicas = append(particionesLogicas, temp)
+		} else if temp.Part_next == -1 {
+			flag = false
+		} else {
+			totalSize += int(temp.Part_size)
+			temp = ReadEBR(path, temp.Part_next)
+		}
+	}
+	bestFit := 0
+	tempSize := 0
+	if len(particionesLogicas) != 0 {
+		for i, v := range particionesLogicas {
+			if tempSize != 0 {
+				bestFit = i
+			} else if tempSize > int(v.Part_size) && v.Part_size >= logicPartition.Part_size {
+				tempSize = int(v.Part_size)
+				bestFit = i
+			}
+		}
+		logicPartition.Part_start = particionesLogicas[bestFit].Part_start
+		logicPartition.Part_next = particionesLogicas[bestFit].Part_next
+		WriteEBR(logicPartition, path, logicPartition.Part_start)
+		Wrote = true
+	}
+	if !Wrote {
+		totalSize = int(logicPartition.Part_size)
+		temp = ReadEBR(path, int64(whereToStart))
+		flag2 := true
+		for flag2 {
+			if temp.Part_next == -1 {
+				totalSize += int(temp.Part_size)
+				if partitionSize < totalSize {
+					fmt.Println("el tamano de todas las particiones logicas unidas son mas grandes que la particion extendida, espacio insuficiente")
+					return false
+				}
+				temp.Part_next = temp.Part_start + temp.Part_size
+				logicPartition.Part_start = temp.Part_next
+				WriteEBR(&temp, path, temp.Part_start)
+				WriteEBR(logicPartition, path, temp.Part_next)
+				flag2 = false
+			} else {
+				totalSize += int(temp.Part_size)
+				temp = ReadEBR(path, temp.Part_next)
+			}
+		}
+	}
+	// aqui deberia ir un print a la consola
+	PrintLogicPartitions(path, int64(whereToStart), int64(partitionSize), extendedName)
+	return true
 }
 
-func WorstFitLogicPart(logicPartition *structures.EBR, path string, whereToStart int, partitionSize int, extendedName [16]byte) bool {
-    var particionesLogicas []structures.EBR
-    var temp structures.EBR
-    totalSize := 0
-    totalSize += int(logicPartition.Part_size)
-    temp = *ReadEBR(path, int64(whereToStart))
-    Wrote := false
-    flag := true
-    for flag {
-        if temp.Part_size == 0 {
-            if partitionSize < int(logicPartition.Part_size) {
-                fmt.Println("la particion logica es mas grande que la extendida")
-                return false
-            }
-            logicPartition.Part_start = int32(whereToStart)
-            WriteEBR(logicPartition, path, int64(whereToStart))
-            flag = false
-            Wrote = true
-        } else if temp.Part_status == '5' {
-            particionesLogicas = append(particionesLogicas, temp)
-        } else if temp.Part_next == -1 {
-            flag = false
-        } else {
-            totalSize += int(temp.Part_size)
-            temp = *ReadEBR(path, int64(temp.Part_next))
-        }
-    }
-    worstFit := 0
-    tempSize := 0
-    if len(particionesLogicas) != 0 {
-        for i, v := range particionesLogicas {
-            if tempSize == 0 || (tempSize < int(v.Part_size) && v.Part_size >= logicPartition.Part_size) {
-                tempSize = int(v.Part_size)
-                worstFit = i
-            }
-        }
-        logicPartition.Part_start = particionesLogicas[worstFit].Part_start
-        logicPartition.Part_next = particionesLogicas[worstFit].Part_next
-        WriteEBR(logicPartition, path, int64(logicPartition.Part_start))
-        Wrote = true
-    }
-    if !Wrote {
-        totalSize = int(logicPartition.Part_size)
-        temp = *ReadEBR(path, int64(whereToStart))
-        flag2 := true
-        for flag2 {
-            if temp.Part_next == -1 {
-                totalSize += int(temp.Part_size)
-                if partitionSize < totalSize {
-                    fmt.Println("el tamano de todas las particiones logicas unidas son mas grandes que la particion extendida, espacio insuficiente")
-                    return false
-                }
-                temp.Part_next = temp.Part_start + temp.Part_size
-                logicPartition.Part_start = temp.Part_next
-                WriteEBR(&temp, path, int64(temp.Part_start))
-                WriteEBR(logicPartition, path, int64(temp.Part_next))
-                flag2 = false
-            } else {
-                totalSize += int(temp.Part_size)
-                temp = *ReadEBR(path, int64(temp.Part_next))
-            }
-        }
-    }
-    // aquí debería ir un print a la consola
-    PrintLogicPartitions(path, int64(whereToStart), int64(partitionSize), extendedName)
-    return true
+func WorstFitLogicPart(logicPartition *datos.EBR, path string, whereToStart int, partitionSize int, extendedName [16]byte) bool {
+	var particionesLogicas []datos.EBR
+	temp := datos.EBR{}
+	totalSize := 0
+	totalSize += int(logicPartition.Part_size)
+	temp = ReadEBR(path, int64(whereToStart))
+	Wrote := false
+	flag := true
+	for flag {
+		if temp.Part_size == 0 {
+			if partitionSize < int(logicPartition.Part_size) {
+				fmt.Println("la particion logica es mas grande que la extendida")
+				return false
+			}
+			logicPartition.Part_start = int64(whereToStart)
+			WriteEBR(logicPartition, path, int64(whereToStart))
+			flag = false
+			Wrote = true
+		} else if temp.Part_status == '5' {
+			particionesLogicas = append(particionesLogicas, temp)
+		} else if temp.Part_next == -1 {
+			flag = false
+		} else {
+			totalSize += int(temp.Part_size)
+			temp = ReadEBR(path, temp.Part_next)
+		}
+	}
+	worstFit := 0
+	tempSize := 0
+	if len(particionesLogicas) != 0 {
+		for i, v := range particionesLogicas {
+			if tempSize != 0 {
+				worstFit = i
+			} else if tempSize < int(v.Part_size) && v.Part_size >= logicPartition.Part_size {
+				tempSize = int(v.Part_size)
+				worstFit = i
+			}
+		}
+		logicPartition.Part_start = particionesLogicas[worstFit].Part_start
+		logicPartition.Part_next = particionesLogicas[worstFit].Part_next
+		WriteEBR(logicPartition, path, logicPartition.Part_start)
+		Wrote = true
+	}
+	if !Wrote {
+		totalSize = int(logicPartition.Part_size)
+		temp = ReadEBR(path, int64(whereToStart))
+		flag2 := true
+		for flag2 {
+			if temp.Part_next == -1 {
+				totalSize += int(temp.Part_size)
+				if partitionSize < totalSize {
+					fmt.Println("el tamano de todas las particiones logicas unidas son mas grandes que la particion extendida, espacio insuficiente")
+					return false
+				}
+				temp.Part_next = temp.Part_start + temp.Part_size
+				logicPartition.Part_start = temp.Part_next
+				WriteEBR(&temp, path, temp.Part_start)
+				WriteEBR(logicPartition, path, temp.Part_next)
+				flag2 = false
+			} else {
+				totalSize += int(temp.Part_size)
+				temp = ReadEBR(path, temp.Part_next)
+			}
+		}
+	}
+	// aqui deberia ir un print a la consola
+	PrintLogicPartitions(path, int64(whereToStart), int64(partitionSize), extendedName)
+	return true
 }
 
-
-func ExisteParticion(master *structures.MBR, name [16]byte) bool {
+func ExisteParticion(master *datos.MBR, name [16]byte) bool {
 	for _, v := range master.Mbr_partitions {
 		if bytes.Equal(v.Part_name[:], name[:]) {
 			return true
@@ -747,77 +579,74 @@ func ExisteParticion(master *structures.MBR, name [16]byte) bool {
 	return false
 }
 
-
-// TrimArray elimina los ceros a la derecha de un array de bytes.
-func TrimArray(arr []byte) []byte {
-    n := len(arr)
-    for n > 0 && arr[n-1] == 0 {
-        n--
-    }
-    return arr[:n]
+func PrintPartitions(master *datos.MBR) {
+	str := ""
+	for i := 0; i < 70; i++ {
+		str += "-"
+	}
+	contenido := ""
+	contenido += fmt.Sprintf("%s\n", str)
+	contenido += fmt.Sprintf("%-20s%-10s%-10s%-10s%-10s%-10s\n", "Name", "Type", "Fit", "Start", "Size", "Status")
+	for _, part := range master.Mbr_partitions {
+		contenido += fmt.Sprintf("%s\n", str)
+		if string(functions.TrimArray(part.Part_name[:])) == "" {
+			contenido += fmt.Sprintf("%-20s", "-")
+		} else {
+			contenido += fmt.Sprintf("%-20s", string(functions.TrimArray(part.Part_name[:])))
+		}
+		if part.Part_type == '0' {
+			contenido += fmt.Sprintf("%-10c", '-')
+		} else {
+			contenido += fmt.Sprintf("%-10c", part.Part_type)
+		}
+		if part.Part_fit == '0' {
+			contenido += fmt.Sprintf("%-10c", '-')
+		} else {
+			contenido += fmt.Sprintf("%-10c", part.Part_fit)
+		}
+		contenido += fmt.Sprintf("%-10d", part.Part_start)
+		contenido += fmt.Sprintf("%-10d", part.Part_size)
+		contenido += fmt.Sprintf("%-10c\n", part.Part_status)
+	}
+	contenido += fmt.Sprintf("%s\n", str)
+	consola.AddToConsole(contenido)
 }
 
-/// PrintLogicPartitions imprime las particiones lógicas.
-func PrintLogicPartitions(path string, whereToStart, partitionSize int64, extendedName [16]byte) {
-    str := ""
-    for i := 0; i < 70; i++ {
-        str += "-"
-    }
-    contenido := ""
-    contenido += fmt.Sprintf("Partition name: %s\n", string(TrimArray(extendedName[:])))
-    contenido += fmt.Sprintf("Partition size: %d\n", partitionSize)
-    contenido += fmt.Sprintf("%s\n", str)
-    contenido += fmt.Sprintf("%-20s%-12s%-10s%-10s%-10s%-10s\n", "Name", "Next Part", "Fit", "Start", "Size", "Status")
-    var temp structures.EBR
-    Fread(&temp, path, whereToStart)
-    flag := true
-    for flag {
-        contenido += fmt.Sprintf("%s\n", str)
-        if string(TrimArray(temp.Part_name[:])) == "" {
-            contenido += fmt.Sprintf("%-20s", "Disponible")
-        } else {
-            contenido += fmt.Sprintf("%-20s", string(TrimArray(temp.Part_name[:])))
-        }
-        contenido += fmt.Sprintf("%-12d", temp.Part_next)
-        if temp.Part_fit == '0' {
-            contenido += fmt.Sprintf("%-10c", '-')
-        } else {
-            contenido += fmt.Sprintf("%-10c", temp.Part_fit)
-        }
-        contenido += fmt.Sprintf("%-10d", temp.Part_start)
-        contenido += fmt.Sprintf("%-10d", temp.Part_size)
-        contenido += fmt.Sprintf("%-10c\n", temp.Part_status)
-        if temp.Part_next == -1 {
-            flag = false
-        } else {
-            Fread(&temp, path, int64(temp.Part_next))
-        }
-    }
-    contenido += fmt.Sprintf("%s\n", str)
-    fmt.Println(contenido)
-}
-
-
-// Fread lee la estructura EBR desde el archivo ubicado en 'path' en la posición 'position'.
-func Fread(ebr *structures.EBR, path string, position int64) {
-    file, err := os.Open(path)
-    if err != nil {
-        fmt.Printf("no se pudo abrir el archivo para leer el EBR %s\n", err.Error())
-        return
-    }
-    defer file.Close()
-
-    // Posicionandonos en la posición especificada del archivo
-    _, err = file.Seek(position, 0)
-    if err != nil {
-        fmt.Printf("no se pudo posicionar en la posición especificada del archivo %s\n", err.Error())
-        return
-    }
-
-    // Leyendo el EBR
-    err = binary.Read(file, binary.LittleEndian, ebr)
-    if err != nil {
-        fmt.Printf("no se pudo leer el EBR %s\n", err.Error())
-        return
-    }
+func PrintLogicPartitions(path string, whereToStart, PartitionSize int64, extendedName [16]byte) {
+	str := ""
+	for i := 0; i < 70; i++ {
+		str += "-"
+	}
+	contenido := ""
+	contenido += fmt.Sprintf("Partition name: %s\n", string(functions.TrimArray(extendedName[:])))
+	contenido += fmt.Sprintf("Partition size: %d\n", PartitionSize)
+	contenido += fmt.Sprintf("%s\n", str)
+	contenido += fmt.Sprintf("%-20s%-12s%-10s%-10s%-10s%-10s\n", "Name", "Next Part", "Fit", "Start", "Size", "Status")
+	var temp datos.EBR
+	Fread(&temp, path, whereToStart)
+	flag := true
+	for flag {
+		contenido += fmt.Sprintf("%s\n", str)
+		if string(functions.TrimArray(temp.Part_name[:])) == "" {
+			contenido += fmt.Sprintf("%-20s", "Disponible")
+		} else {
+			contenido += fmt.Sprintf("%-20s", string(functions.TrimArray(temp.Part_name[:])))
+		}
+		contenido += fmt.Sprintf("%-12d", temp.Part_next)
+		if temp.Part_fit == '0' {
+			contenido += fmt.Sprintf("%-10c", '-')
+		} else {
+			contenido += fmt.Sprintf("%-10c", temp.Part_fit)
+		}
+		contenido += fmt.Sprintf("%-10d", temp.Part_start)
+		contenido += fmt.Sprintf("%-10d", temp.Part_size)
+		contenido += fmt.Sprintf("%-10c\n", temp.Part_status)
+		if temp.Part_next == -1 {
+			flag = false
+		} else {
+			Fread(&temp, path, temp.Part_next)
+		}
+	}
+	contenido += fmt.Sprintf("%s\n", str)
+	consola.AddToConsole(contenido)
 }

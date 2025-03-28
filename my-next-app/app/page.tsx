@@ -1,55 +1,67 @@
-"use client";
+'use client';
+import { Editor } from '@monaco-editor/react';
+import { useState, useEffect } from 'react';
 
-import { useState } from 'react';
-import Image from 'next/image';
+const API_URL = 'http://localhost:8080';
 
 export default function Home() {
-  const [command, setCommand] = useState('');
-  const [response, setResponse] = useState('');
-  const [output, setOutput] = useState('');
+  const [code, setCode] = useState<string>('');
+  const [output, setOutput] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const res = await fetch('http://localhost:8080/analyze', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ command }),
-    });
-    const data = await res.json();
-    setResponse(data.message || data.error);
-    setOutput(JSON.stringify(data.output, null, 2) || '');
+    try {
+      const res = await fetch(`${API_URL}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: code }),
+      });
+
+      await res.json();
+
+      const consoleRes = await fetch(`${API_URL}/getConsole`);
+      const consoleData = await consoleRes.json();
+
+      setOutput(consoleData.console);
+    } catch (error) {
+      setOutput('Error en la ejecución');
+    }
+  };
+
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.name.endsWith('.glt')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setCode(e.target?.result as string);
+      };
+      reader.readAsText(file);
+    } else {
+      alert('Seleccione un archivo con extensión .glt');
+    }
   };
 
   return (
-    <div className="grid grid-cols-2 gap-4 min-h-screen p-8 pb-20 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 col-span-2 items-center sm:items-start">
+    <div className='flex flex-col items-center justify-center min-h-screen py-2'>
+      <h1 className='text-3xl font-bold mb-4'>Proyecto1 MIA</h1>
+      <input type='file' accept='.glt' onChange={handleFileUpload} className='mb-4' />
 
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing
-          </li>
-        </ol>
+      <div className='flex flex-row items-center justify-center w-full'>
+        <div className='flex flex-col items-center justify-center w-1/2'>
+          <Editor height='70vh' defaultLanguage='javascript' theme='vs-dark' value={code} onChange={(value) => setCode(value || '')} />
+        </div>
+        <div className='flex flex-col items-center justify-center w-1/2'>
+          <Editor height='70vh' defaultLanguage='' theme='vs-dark' value={output} options={{ readOnly: true }} />
+        </div>
 
-        <form onSubmit={handleSubmit} className="w-full">
-          <input
-            type="text"
-            value={command}
-            onChange={(e) => setCommand(e.target.value)}
-            placeholder="Enter command"
-            className="border p-2 rounded w-full text-black"
-          />
-          <button type="submit" className="mt-2 p-2 bg-blue-500 text-white rounded w-full">
-            Analyze
-          </button>
-        </form>
-      </main>
-
-      <div className="bg-black text-white p-4 rounded h-96 overflow-y-auto">
-        <h2 className="text-lg font-bold">Terminal 1</h2>
-        <pre>{response}</pre>
       </div>
+
+      <form onSubmit={handleSubmit} className='flex gap-4 mt-4'>
+        <button type='submit' className='bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded'>
+          Ejecutar
+        </button>
+      </form>
     </div>
   );
 }
