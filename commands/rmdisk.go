@@ -18,24 +18,14 @@ type Rmdisk struct {
 
 func (r *Rmdisk) Exe(parametros []string) {
 	r.Params = r.SaveParams(parametros)
-	consola.AddToConsole("¿Quieres eliminar el archivo? [Y/N]: ")
-	var respuesta string
-	fmt.Scanln(&respuesta)
-	// Convertir la respuesta a mayúsculas para manejar entradas en minúsculas
-	respuesta = strings.ToUpper(respuesta)
 
-	if respuesta == "Y" {
-		if r.Rmdisk(r.Params.Path) {
-			consola.AddToConsole(fmt.Sprintf("\nrmdisk realizado con exito para la ruta: %s\n\n", r.Params.Path))
-		} else {
-			consola.AddToConsole(fmt.Sprintf("\n[ERROR!] no se logro realizar el comando rmdisk para la ruta: %s\n\n", r.Params.Path))
-		}
-	} else if respuesta == "N" {
-		consola.AddToConsole("Archivo no eliminado.")
+	if r.Rmdisk(r.Params.Path) {
+		consola.AddToConsole(fmt.Sprintf("\nrmdisk realizado con éxito para la ruta: %s\n\n", r.Params.Path))
 	} else {
-		consola.AddToConsole("Respuesta no válida. Por favor, ingresa 'Y' o 'N'.")
+		consola.AddToConsole(fmt.Sprintf("\n[ERROR!] No se logró realizar el comando rmdisk para la ruta: %s\n\n", r.Params.Path))
 	}
 }
+
 
 func (r *Rmdisk) SaveParams(parametros []string) ParametrosRmdisk {
 	var params ParametrosRmdisk

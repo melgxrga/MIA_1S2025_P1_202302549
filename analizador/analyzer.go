@@ -49,6 +49,10 @@ func (a *Analyzer) Analyzer(input string) (interface{}, error) {
 		case "mount":
 			m := comandos.Mount{}
 			m.Exe(params)
+		
+		case "rmdisk":
+			r := comandos.Rmdisk{}
+			r.Exe(params)
 
 		case "mkfs":
 			m := comandos.Mkfs{}
@@ -65,6 +69,20 @@ func (a *Analyzer) Analyzer(input string) (interface{}, error) {
 		case "rep":
 			r := usuariosygrupos.Rep{}
 			r.Exe(params)
+		case "mkgrp":
+			m := usuariosygrupos.Mkgrp{}
+			m.Exe(params)
+		case "rmgrp":
+			r := usuariosygrupos.Rmgrp{}
+			r.Exe(params)
+		case "mkusr":
+			m := usuariosygrupos.Mkusr{}
+			m.Exe(params)
+		case "rmusr":
+			r := usuariosygrupos.Rmusr{}
+			r.Exe(params)
+			
+	
 
 		default:
 			if strings.HasPrefix(command, "#") {

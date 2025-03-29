@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 	"unsafe"
-
+	"regexp"
 	"github.com/melgxrga/proyecto1Archivos/commands"
 	"github.com/melgxrga/proyecto1Archivos/consola"
 	"github.com/melgxrga/proyecto1Archivos/structures"
@@ -31,18 +31,45 @@ func (r *Rmgrp) Exe(parametros []string) {
 }
 
 func (r *Rmgrp) SaveParams(parametros []string) ParametrosRmgrp {
-	for _, v := range parametros {
-		// fmt.Println(v)
-		v = strings.TrimSpace(v)
-		v = strings.TrimRight(v, " ")
-		v = strings.ReplaceAll(v, "\"", "")
-		if strings.Contains(v, "name") {
-			v = strings.ReplaceAll(v, "name=", "")
-			r.params.Name = v
+	// Unir todos los parámetros en una sola cadena
+	args := strings.Join(parametros, " ")
+
+	// Expresión regular para capturar los parámetros
+	re := regexp.MustCompile(`-name=[^\s]+`)
+	matches := re.FindAllString(args, -1)
+
+	// Iterar sobre cada coincidencia
+	for _, match := range matches {
+		kv := strings.SplitN(match, "=", 2)
+		if len(kv) != 2 {
+			fmt.Printf("Formato de parámetro inválido: %s\n", match)
+			continue
+		}
+		key, value := strings.ToLower(kv[0]), kv[1]
+
+		// Quitar comillas si las tiene
+		if strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
+			value = strings.Trim(value, "\"")
+		}
+
+		// Procesar parámetros
+		switch key {
+		case "-name":
+			// Asignar el valor al campo correspondiente de la estructura
+			r.params.Name = value
+		default:
+			fmt.Printf("Parámetro desconocido: %s\n", key)
 		}
 	}
+
+	// Validación final de los parámetros obligatorios
+	if r.params.Name == "" {
+		fmt.Println("Error: Falta el parámetro obligatorio -name")
+	}
+
 	return r.params
 }
+
 
 func (r *Rmgrp) Rmgrp(name string) bool {
 	if name == "" {

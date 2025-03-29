@@ -4,6 +4,11 @@ mkdisk -size=3000 -path="proyecto#1/disks/prueba2.mia"
 mkdisk -size=3000 -unit=M -fit=WF -path="mkdisk -size=3000 -unit=K -fit=WF -path=/home/gabriel-melgar/Escritorio/Archivos/proyecto1mia1/disks/prueba3.mia
 rmdisk -path=/home/gabriel-melgar/Escritorio/proyecto1mia1/disks/prueba2.mia
 
+mkdisk -param=x -size=30 -path=/home/melgar/Escritorio/proyecto1mia1/disks/DiscoN.mia
+mkdisk -size=50 -unit=M -fit=FF -path=/home/gabriel-melgar/Escritorio/proyecto1mia1/disks/Disco1.mia
+mkdisk -size=50 -unit=M -fit=FF -path=/home/gabriel-melgar/Escritorio/proyecto1mia1/disks/Disco1.mia
+mkdisk -unit=k -size=51200 -fit=BF -path=/home/gabriel-melgar/Escritorio/proyecto1mia1/disks/Disco2.mia
+
 
 mount -name="ParticionPrimari" -path=/home/gabriel-melgar/Escritorio/proyecto1mia1/disks/prueba2.mia 
 mkfs -id=prueba2149

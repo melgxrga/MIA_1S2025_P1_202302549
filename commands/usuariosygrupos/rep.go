@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"unsafe"
-
+	"regexp"
 	"github.com/melgxrga/proyecto1Archivos/commands"
 	"github.com/melgxrga/proyecto1Archivos/consola"
 	"github.com/melgxrga/proyecto1Archivos/structures"
@@ -34,26 +34,70 @@ func (r *Rep) Exe(parametros []string) {
 }
 
 func (r *Rep) SaveParams(parametros []string) ParametrosRep {
-	for _, v := range parametros {
-		// fmt.Println(v)
-		v = strings.TrimSpace(v)
-		v = strings.TrimRight(v, " ")
-		v = strings.ReplaceAll(v, "\"", "")
-		if strings.Contains(v, "name") {
-			v = strings.ReplaceAll(v, "name=", "")
-			r.Params.Name = v
-		} else if strings.Contains(v, "path") {
-			v = strings.ReplaceAll(v, "path=", "")
-			r.Params.Path = v
-		} else if strings.Contains(v, "id") {
-			v = strings.ReplaceAll(v, "id=", "")
-			r.Params.Id = v
-		} else if strings.Contains(v, "ruta") {
-			v = strings.ReplaceAll(v, "ruta=", "")
-			r.Params.Ruta = v
+	var params ParametrosRep
+	// Unir todos los parámetros en una sola cadena
+	args := strings.Join(parametros, " ")
+
+	// Expresión regular para capturar los parámetros
+	re := regexp.MustCompile(`-name=\w+|-path="[^"]+"|-path=[^\s]+|-id=\w+|-ruta="[^"]+"|-ruta=[^\s]+`)
+	matches := re.FindAllString(args, -1)
+
+	// Iterar sobre cada coincidencia
+	for _, match := range matches {
+		kv := strings.SplitN(match, "=", 2)
+		if len(kv) != 2 {
+			fmt.Printf("Formato de parámetro inválido: %s\n", match)
+			continue
+		}
+		key, value := strings.ToLower(kv[0]), kv[1]
+
+		// Quitar comillas si las tiene
+		if strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
+			value = strings.Trim(value, "\"")
+		}
+
+		switch key {
+		case "-name":
+			if value == "" {
+				fmt.Println("Error: el nombre no puede estar vacío")
+				continue
+			}
+			params.Name = value
+		case "-path":
+			if value == "" {
+				fmt.Println("Error: el path no puede estar vacío")
+				continue
+			}
+			params.Path = value
+		case "-id":
+			if value == "" {
+				fmt.Println("Error: el ID no puede estar vacío")
+				continue
+			}
+			params.Id = value
+		case "-ruta":
+			if value == "" {
+				fmt.Println("Error: la ruta no puede estar vacía")
+				continue
+			}
+			params.Ruta = value
+		default:
+			fmt.Printf("Parámetro desconocido: %s\n", key)
 		}
 	}
-	return r.Params
+
+	// Validación final de los parámetros obligatorios
+	if params.Name == "" {
+		fmt.Println("Error: Falta el parámetro obligatorio -name")
+	}
+	if params.Path == "" {
+		fmt.Println("Error: Falta el parámetro obligatorio -path")
+	}
+	if params.Id == "" {
+		fmt.Println("Error: Falta el parámetro obligatorio -id")
+	}
+
+	return params
 }
 
 func (r *Rep) Rep(name, path, id, ruta string) bool {
@@ -116,48 +160,60 @@ func (r *Rep) ReporteMBR(path, id string) {
 	contenido += "\t\t\t<TR><TD bgcolor=\"purple\" COLSPAN=\"2\"> REPORTE MBR</TD></TR>\n"
 	contenido += "\t\t\t<TR><TD> mbr_tamano </TD><TD>" + strconv.FormatInt(master.Mbr_tamano, 10) + "</TD></TR>\n"
 
-	// string(TrimArray
+	// Convertir la fecha de creación en string
 	dateString := string(TrimArray(master.Mbr_fecha_creacion[:]))
 	contenido += "\t\t\t<TR><TD bgcolor=\"#D3D3FA\"> mbr_fecha_creacion </TD><TD bgcolor=\"#D3D3FA\">" + dateString + "</TD></TR>\n"
-	contenido += "\t\t\t<TR><TD> mbr_tamano </TD><TD>" + strconv.FormatInt(master.Mbr_dsk_signature, 10) + "</TD></TR>\n"
+	contenido += "\t\t\t<TR><TD> mbr_dsk_signature </TD><TD>" + strconv.FormatInt(master.Mbr_dsk_signature, 10) + "</TD></TR>\n"
+
+	// Agregar información de las particiones
 	for _, part := range master.Mbr_partitions {
-		//consola.AddToConsole("ENTRO AL FOR")
 		if part.Part_status != '0' && part.Part_status != '5' {
-			contenido += "\t\t\t<TR><TD bgcolor=\"purple\" COLSPAN=\"2\">Particion</TD></TR>\n"
-			contenido += "\t\t\t<TR><TD> part_status </TD><TD>"
-			contenido += string(part.Part_status)
-			contenido += "</TD></TR>\n"
-			contenido += "\t\t\t<TR><TD bgcolor=\"#D3D3FA\"> part_type </TD><TD bgcolor=\"#D3D3FA\">"
-			contenido += string(part.Part_type)
-			contenido += "</TD></TR>\n"
-			contenido += "\t\t\t<TR><TD> part_fit </TD><TD>"
-			contenido += string(part.Part_fit)
-			contenido += "</TD></TR>\n"
+			contenido += "\t\t\t<TR><TD bgcolor=\"purple\" COLSPAN=\"2\">Partición</TD></TR>\n"
+			contenido += "\t\t\t<TR><TD> part_status </TD><TD>" + string(part.Part_status) + "</TD></TR>\n"
+			contenido += "\t\t\t<TR><TD bgcolor=\"#D3D3FA\"> part_type </TD><TD bgcolor=\"#D3D3FA\">" + string(part.Part_type) + "</TD></TR>\n"
+			contenido += "\t\t\t<TR><TD> part_fit </TD><TD>" + string(part.Part_fit) + "</TD></TR>\n"
 			contenido += "\t\t\t<TR><TD bgcolor=\"#D3D3FA\"> part_start </TD><TD bgcolor=\"#D3D3FA\">" + strconv.FormatInt(part.Part_start, 10) + "</TD></TR>\n"
 			contenido += "\t\t\t<TR><TD> part_size </TD><TD>" + strconv.FormatInt(part.Part_size, 10) + "</TD></TR>\n"
 			contenido += "\t\t\t<TR><TD bgcolor=\"#D3D3FA\"> part_name </TD><TD bgcolor=\"#D3D3FA\">" + string(TrimArray(part.Part_name[:])) + "</TD></TR>\n"
 		}
-		if part.Part_type == 'E' {
+
+		// Si la partición es extendida, recorrer sus EBRs
+		if part.Part_type == 'E' || part.Part_type == 'e' {
 			consola.AddToConsole("EBR")
-			// metodo para agregar lo de las partiiones logicas
 			contenido += r.recorrerEBR(node.Ruta, part.Part_start)
 		}
 	}
 	contenido += "\t\t</TABLE>\n"
 	contenido += "\t>]\n"
 	contenido += "}\n"
+
+	// Crear el archivo .dot
 	directory := path + ".dot"
-	// hay que crear los directorios el archivo nuevo
 	comandos.MkDirectory(directory)
 	comandos.Fopen(directory, contenido)
-	// falta mandar el comando para convertirlo en pdf
-	cmd := exec.Command("dot", directory, "-Tpdf", "-o", path+".pdf")
-	err := cmd.Run()
+
+	// Definir la ruta completa para guardar en el directorio especificado
+	reportDir := "/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/reports"
+	pdfPath := reportDir + "/" + path + ".pdf"
+	pngPath := reportDir + "/" + path + ".png"
+
+	// Generar el PDF
+	cmdPDF := exec.Command("dot", directory, "-Tpdf", "-o", pdfPath)
+	err := cmdPDF.Run()
 	if err != nil {
-		consola.AddToConsole(fmt.Sprintf("Error reporte MBR: %s\n", err.Error()))
+		consola.AddToConsole(fmt.Sprintf("Error reporte MBR (PDF): %s\n", err.Error()))
+		return
+	}
+
+	// Generar el PNG
+	cmdPNG := exec.Command("dot", directory, "-Tpng", "-o", pngPath)
+	err = cmdPNG.Run()
+	if err != nil {
+		consola.AddToConsole(fmt.Sprintf("Error reporte MBR (PNG): %s\n", err.Error()))
 		return
 	}
 }
+
 
 func (r *Rep) recorrerEBR(ruta string, whereToStart int64) string {
 	contenido := ""
@@ -243,18 +299,35 @@ func (r *Rep) ReporteDisk(path, id string) {
 	contenido += "\t\t</TABLE>\n"
 	contenido += "\t>]\n"
 	contenido += "}\n"
+
+	// Crear el archivo .dot
 	directory := path + ".dot"
-	// hay que crear los directorios el archivo nuevo
 	comandos.MkDirectory(directory)
 	comandos.Fopen(directory, contenido)
-	// falta mandar el comando para convertirlo en pdf
-	cmd := exec.Command("dot", directory, "-Tpdf", "-o", path+".pdf")
-	err := cmd.Run()
+
+	// Definir la ruta del directorio de salida
+	reportDir := "/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/reports"
+
+	// Generar el PDF
+	pdfPath := reportDir + "/" + path + ".pdf"
+	cmdPDF := exec.Command("dot", directory, "-Tpdf", "-o", pdfPath)
+	err := cmdPDF.Run()
 	if err != nil {
-		consola.AddToConsole(fmt.Sprintf("Error reporte Disk: %s\n", err.Error()))
+		consola.AddToConsole(fmt.Sprintf("Error reporte Disk (PDF): %s\n", err.Error()))
+		return
+	}
+
+	// Generar el PNG
+	pngPath := reportDir + "/" + path + ".png"
+	cmdPNG := exec.Command("dot", directory, "-Tpng", "-o", pngPath)
+	err = cmdPNG.Run()
+	if err != nil {
+		consola.AddToConsole(fmt.Sprintf("Error reporte Disk (PNG): %s\n", err.Error()))
 		return
 	}
 }
+
+
 
 func (r *Rep) ContarParticiones(ruta string, whereToStart int64) int {
 	contador := 0

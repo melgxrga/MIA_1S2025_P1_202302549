@@ -42,7 +42,7 @@ func (m *Mkfs) SaveParams(parametros []string) ParametrosMkfs {
 			continue
 		}
 		key, value := strings.ToLower(kv[0]), kv[1]
-		switch key []
+		switch key {
 		case "-id":
 			if value == "" {
 				fmt.Println("Error: el ID no puede estar vacío")
