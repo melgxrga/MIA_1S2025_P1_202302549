@@ -119,3 +119,53 @@ mkusr -user="user2" -pass=abc -grp=usuarios
 #ERROR GRUPO NO EXISTE
 mkusr -user="user3" -pass=abc -grp=system
 
+#-----------------6.CAT-----------------
+cat -file1=/users.txt
+
+
+#-----------------12.RMUSR-----------------
+rmusr -user=user2
+
+#-----------------15.MKDIR-----------------
+mkdir -path=/bin
+# ERROR NO EXISTEN LAS CARPETAS PADRES
+mkdir -path="/home/archivos/archivos 24"
+mkdir -p -path=/home/archivos/user/docs/usac
+mkdir -p -path=/home/archivos/carpeta1/carpeta2/carpeta3/carpeta4/carpeta5
+#-----------------8.LOGOUT-----------------
+logout
+logout #ERROR NO HAY SESION INICIADA
+
+
+#-----------------7.LOGIN-----------------
+login -user=user1 -pass=abc -id=Disco1149
+
+#-----------------14.MKFILE-----------------
+mkfile -path=/home/gabriel-melgar/Documentos/Tarea.txt -size=75
+mkfile -path=/home/gabriel-melgar/Documentos/Tarea2.txt -size=768
+
+
+#Para este comando hay que crear un archivo en la computadora y en cont poner su primer nombre
+#Crear un archivo txt en su Escritorio llamado NAME
+
+
+# Cambiar la ruta del cont por la del archivo NAME.txt que creo
+mkfile -path=/home/gabriel-melgar/Escritorio/archivos/user/docs/Tarea3.txt -size=10 -cont=/home/gabriel-melgar/Escritorio/Calificacion_MIA/Gabriel/NAME.txt
+
+
+#ERROR NO EXISTE RUTA
+mkfile -path="/home/archivos/noexiste/b1.txt"
+
+
+#ERROR NEGATIVO
+mkfile -path="/home/archivos/b1.txt" -size=-45
+
+
+#------------------------REPORTESPARTE4----------------
+rep -id=Disco1149 -path=/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/reports/p4_r1_inode.jpg" -name=inode
+rep -id=Disco1149 -path=/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/reports/p4_r5_sb.jpg" -name=sb
+rep -id=Disco1149 -path=/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/reports/p4_r6_file.jpg -path_file_ls=/home/gabriel-melgar/Documentos/Tarea2.txt  -name=file
+rep -id=Disco1149 -path=/home/gabriel-melgar/Escritorio/MIA_1S2025_P1_202302549/reports/p4_r8_tree.png" -name=tree
+
+#------------------------8.LOGOUT------------------------
+logout

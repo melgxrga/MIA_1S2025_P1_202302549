@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 	"unsafe"
-
+	"regexp"
 	"github.com/melgxrga/proyecto1Archivos/bitmap"
 	"github.com/melgxrga/proyecto1Archivos/commands"
 	"github.com/melgxrga/proyecto1Archivos/consola"
@@ -27,29 +27,73 @@ type Mkdir struct {
 
 func (m *Mkdir) Exe(parametros []string) {
 	m.Params = m.SaveParams(parametros)
-	if m.Mkdir(m.Params.Path, m.Params.R) {
-		consola.AddToConsole(fmt.Sprintf("\nla carpeta con ruta %s se creo correctamente\n\n", m.Params.Path))
+
+	// Intentamos crear el directorio y verificamos si realmente fue creado
+	if creado := m.Mkdir(m.Params.Path, m.Params.R); creado {
+		if _, err := os.Stat(m.Params.Path); os.IsNotExist(err) {
+			// Si Mkdir devolvió true pero el directorio no existe, corregimos el mensaje
+			consola.AddToConsole(fmt.Sprintf("\nERROR: la carpeta con ruta %s no se creó correctamente\n\n", m.Params.Path))
+		} else {
+			// Si el directorio realmente existe, se confirma su creación
+			consola.AddToConsole(fmt.Sprintf("\nla carpeta con ruta %s se creó correctamente\n\n", m.Params.Path))
+		}
 	} else {
 		consola.AddToConsole(fmt.Sprintf("\nla carpeta con ruta %s no se pudo crear\n\n", m.Params.Path))
 	}
 }
 
+
 func (m *Mkdir) SaveParams(parametros []string) ParametrosMkdir {
-	for _, v := range parametros {
-		// fmt.Println(v)
-		v = strings.TrimSpace(v)
-		v = strings.TrimRight(v, " ")
-		v = strings.ReplaceAll(v, "\"", "")
-		if strings.Contains(v, "path") {
-			v = strings.ReplaceAll(v, "path=", "")
-			m.Params.Path = v
-		} else if v == "r" {
-			// v = strings.ReplaceAll(v, "r", "")
-			m.Params.R = true
+	var params ParametrosMkdir
+	// Unir todos los parámetros en una sola cadena
+	args := strings.Join(parametros, " ")
+
+	// Expresión regular para capturar los parámetros
+	re := regexp.MustCompile(`-path="[^"]+"|-path=[^\s]+|-r`)
+	matches := re.FindAllString(args, -1)
+
+	// Iterar sobre cada coincidencia
+	for _, match := range matches {
+		kv := strings.SplitN(match, "=", 2)
+
+		// Si es la opción `-r`, solo se marca como `true`
+		if match == "-r" {
+			params.R = true
+			continue
+		}
+
+		if len(kv) != 2 {
+			fmt.Printf("Formato de parámetro inválido: %s\n", match)
+			continue
+		}
+		key, value := strings.ToLower(kv[0]), kv[1]
+
+		// Quitar comillas si las tiene
+		if strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
+			value = strings.Trim(value, "\"")
+		}
+
+		// Procesar el parámetro
+		switch key {
+		case "-path":
+			if value == "" {
+				fmt.Println("Error: el path no puede estar vacío")
+				continue
+			}
+			params.Path = value
+		default:
+			fmt.Printf("Parámetro desconocido: %s\n", key)
 		}
 	}
-	return m.Params
+
+	// Validación final del parámetro obligatorio
+	if params.Path == "" {
+		fmt.Println("Error: Falta el parámetro obligatorio -path")
+	}
+
+	return params
 }
+
 
 func (m *Mkdir) Mkdir(path string, r bool) bool {
 	if path == "" {

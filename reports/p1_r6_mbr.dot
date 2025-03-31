@@ -4,8 +4,8 @@ digraph {
 		<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
 			<TR><TD bgcolor="purple" COLSPAN="2"> REPORTE MBR</TD></TR>
 			<TR><TD> mbr_tamano </TD><TD>20971520</TD></TR>
-			<TR><TD bgcolor="#D3D3FA"> mbr_fecha_creacion </TD><TD bgcolor="#D3D3FA">2025-03-29 00:30:43</TD></TR>
-			<TR><TD> mbr_dsk_signature </TD><TD>36</TD></TR>
+			<TR><TD bgcolor="#D3D3FA"> mbr_fecha_creacion </TD><TD bgcolor="#D3D3FA">2025-03-30 19:57:07</TD></TR>
+			<TR><TD> mbr_dsk_signature </TD><TD>133</TD></TR>
 			<TR><TD bgcolor="purple" COLSPAN="2">Partición</TD></TR>
 			<TR><TD> part_status </TD><TD>1</TD></TR>
 			<TR><TD bgcolor="#D3D3FA"> part_type </TD><TD bgcolor="#D3D3FA">E</TD></TR>

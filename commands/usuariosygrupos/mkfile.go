@@ -6,9 +6,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 	"unsafe"
-
+	"regexp"
 	"github.com/melgxrga/proyecto1Archivos/bitmap"
 	"github.com/melgxrga/proyecto1Archivos/commands"
 	"github.com/melgxrga/proyecto1Archivos/consola"
@@ -28,126 +27,182 @@ type Mkfile struct {
 	Params ParametrosMkfile
 }
 
-func (m *Mkfile) Exe(parametros []string) {
-	m.Params = m.SaveParams(parametros)
-	if m.Mkfile(m.Params.Path, m.Params.R, m.Params.Size, m.Params.Cont) {
-		consola.AddToConsole(fmt.Sprintf("\nel archivo con ruta %s se creo correctamente\n\n", m.Params.Path))
-	} else {
-		consola.AddToConsole(fmt.Sprintf("\nel archivo con ruta %s no se pudo crear\n\n", m.Params.Path))
-	}
-}
 
 func (m *Mkfile) SaveParams(parametros []string) ParametrosMkfile {
-	for _, v := range parametros {
-		// fmt.Println(v)
-		v = strings.TrimSpace(v)
-		v = strings.TrimRight(v, " ")
-		v = strings.ReplaceAll(v, "\"", "")
-		if strings.Contains(v, "path") {
-			v = strings.ReplaceAll(v, "path=", "")
-			m.Params.Path = v
-		} else if v == "r" {
-			// v = strings.ReplaceAll(v, "r", "")
-			m.Params.R = true
-		} else if strings.Contains(v, "cont") {
-			v = strings.ReplaceAll(v, "cont=", "")
-			m.Params.Cont = v
-		} else if strings.Contains(v, "size") {
-			v = strings.ReplaceAll(v, "size=", "")
-			v = strings.ReplaceAll(v, " ", "")
-			num, err := strconv.Atoi(v)
-			if err != nil {
-				fmt.Println("hubo un error al convertir a int", err.Error())
+	var params ParametrosMkfile
+	// Unir todos los parámetros en una sola cadena
+	args := strings.Join(parametros, " ")
+
+	// Expresión regular para capturar los parámetros
+	re := regexp.MustCompile(`-path="[^"]+"|-path=[^\s]+|-size=\d+|-cont="[^"]+"|-cont=[^\s]+|-r`)
+	matches := re.FindAllString(args, -1)
+
+	// Iterar sobre cada coincidencia
+	for _, match := range matches {
+		kv := strings.SplitN(match, "=", 2)
+
+		// Si es la opción `-r`, solo se marca como `true`
+		if match == "-r" {
+			params.R = true
+			continue
+		}
+
+		if len(kv) != 2 {
+			fmt.Printf("Formato de parámetro inválido: %s\n", match)
+			continue
+		}
+		key, value := strings.ToLower(kv[0]), kv[1]
+
+		// Quitar comillas si las tiene
+		if strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
+			value = strings.Trim(value, "\"")
+		}
+
+		// Procesar el parámetro
+		switch key {
+		case "-path":
+			if value == "" {
+				fmt.Println("Error: el path no puede estar vacío")
+				continue
 			}
-			m.Params.Size = num
+			params.Path = value
+		case "-size":
+			size, err := strconv.Atoi(value)
+			if err != nil || size < 0 {
+				fmt.Println("Error: el tamaño debe ser un número entero positivo")
+				continue
+			}
+			params.Size = size
+		case "-cont":
+			if value == "" {
+				fmt.Println("Error: el contenido no puede estar vacío")
+				continue
+			}
+			params.Cont = value
+		default:
+			fmt.Printf("Parámetro desconocido: %s\n", key)
 		}
 	}
-	return m.Params
+
+	// Validación final de los parámetros obligatorios
+	if params.Path == "" {
+		fmt.Println("Error: Falta el parámetro obligatorio -path")
+	}
+
+	return params
+}
+
+
+func (m *Mkfile) Exe(parametros []string) {
+	fmt.Println("Depuración: Ejecutando Mkfile con parámetros:", parametros)
+	m.Params = m.SaveParams(parametros)
+
+	fmt.Println("Depuración: Parámetros guardados ->", m.Params)
+
+	if creado := m.Mkfile(m.Params.Path, m.Params.R, m.Params.Size, m.Params.Cont); creado {
+		if _, err := os.Stat(m.Params.Path); os.IsNotExist(err) {
+			consola.AddToConsole(fmt.Sprintf("\nERROR: El archivo %s no se creó correctamente\n\n", m.Params.Path))
+		} else {
+			consola.AddToConsole(fmt.Sprintf("\nEl archivo %s se creó correctamente\n\n", m.Params.Path))
+		}
+	} else {
+		consola.AddToConsole(fmt.Sprintf("\nNo se pudo crear el archivo %s\n\n", m.Params.Path))
+	}
 }
 
 func (m *Mkfile) Mkfile(path string, r bool, size int, cont string) bool {
+	fmt.Println("Depuración: Iniciando Mkfile con path:", path, "r:", r, "size:", size, "cont:", cont)
+
 	if path == "" {
-		consola.AddToConsole("no se encontro una ruta\n")
-		return false
-	}
-	path = strings.Replace(path, "/", "", 1)
-	if !logger.Log.IsLoggedIn() {
-		consola.AddToConsole("no se encuentra un usuario loggeado para crear un archivo\n")
-		return false
-	}
-	if size < 0 {
-		consola.AddToConsole(("el size no puede ser negativo"))
+		consola.AddToConsole("ERROR: No se especificó una ruta.\n")
 		return false
 	}
 
-	if lista.ListaMount.GetNodeById(logger.Log.GetUserId()).Value != nil {
-		return createFile(logger.Log.GetUserName(), lista.ListaMount.GetNodeById(logger.Log.GetUserId()).Ruta, path, lista.ListaMount.GetNodeById(logger.Log.GetUserId()).Value.Part_start, r, size, cont)
-	} else if lista.ListaMount.GetNodeById(logger.Log.GetUserId()).ValueL != nil {
-		return createFile(logger.Log.GetUserName(), lista.ListaMount.GetNodeById(logger.Log.GetUserId()).Ruta, path, lista.ListaMount.GetNodeById(logger.Log.GetUserId()).ValueL.Part_start+int64(unsafe.Sizeof(datos.EBR{})), r, size, cont)
+	path = strings.Replace(path, "/", "", 1)
+	fmt.Println("Depuración: Ruta procesada ->", path)
+
+	if !logger.Log.IsLoggedIn() {
+		consola.AddToConsole("ERROR: No hay un usuario logueado para crear archivos.\n")
+		return false
 	}
+
+	fmt.Println("Depuración: Usuario logueado ->", logger.Log.GetUserName())
+
+	if size < 0 {
+		consola.AddToConsole("ERROR: El tamaño del archivo no puede ser negativo.\n")
+		return false
+	}
+
+	fmt.Println("Depuración: Buscando partición montada...")
+
+	montaje := lista.ListaMount.GetNodeById(logger.Log.GetUserId())
+
+	if montaje == nil {
+		fmt.Println("Depuración: No se encontró una partición montada.")
+		return false
+	}
+
+	if montaje.Value != nil {
+		fmt.Println("Depuración: Partición primaria encontrada en", montaje.Ruta)
+		return createFile(logger.Log.GetUserName(), montaje.Ruta, path, montaje.Value.Part_start, r, size, cont)
+	} else if montaje.ValueL != nil {
+		fmt.Println("Depuración: Partición extendida encontrada en", montaje.Ruta)
+		return createFile(logger.Log.GetUserName(), montaje.Ruta, path, montaje.ValueL.Part_start+int64(unsafe.Sizeof(datos.EBR{})), r, size, cont)
+	}
+
+	fmt.Println("Depuración: No se pudo determinar la partición.")
 	return false
 }
-
 func createFile(name [10]byte, path, ruta string, whereToStart int64, r bool, size int, cont string) bool {
-	// superbloque de la particion
+	fmt.Println("Depuración: Creando archivo en", ruta, "Inicio en:", whereToStart)
+
 	var superbloque datos.SuperBloque
 	comandos.Fread(&superbloque, path, whereToStart)
+	fmt.Println("Depuración: Superbloque leído correctamente.")
+
 	var tablaInodoRoot datos.TablaInodo
 	comandos.Fread(&tablaInodoRoot, path, superbloque.S_inode_start)
+	fmt.Println("Depuración: Inodo raíz leído correctamente.")
 
-	// obteniendo el contenido de la tabla de inodos de Users.txt
 	var tablaInodoUsers datos.TablaInodo
 	comandos.Fread(&tablaInodoUsers, path, superbloque.S_inode_start+superbloque.S_inode_size)
 	contenido := ReadFile(&tablaInodoUsers, path, &superbloque)
-	// obteniendo el user id y el group id
+	fmt.Println("Depuración: Contenido de Users.txt obtenido.")
+
 	userId := GetUserId(contenido, string(TrimArray(name[:])))
-	groupdId := GetGroupId(contenido, string(TrimArray(name[:])))
+	groupId := GetGroupId(contenido, string(TrimArray(name[:])))
+	fmt.Println("Depuración: Usuario ID ->", userId, "Grupo ID ->", groupId)
+
 	if r {
-		// Create directories
-		FindAndCreateDirectories(&tablaInodoRoot, path, ruta, &superbloque, 0, userId, groupdId)
+		fmt.Println("Depuración: Creando directorios si no existen...")
+		FindAndCreateDirectories(&tablaInodoRoot, path, ruta, &superbloque, 0, userId, groupId)
 	}
+
 	content := ""
 	if cont != "" {
-		// Retrieve information
-		// fmt.Println("Retrieve information")
+		fmt.Println("Depuración: Cargando contenido desde", cont)
 		content = getContent(cont)
-		// fmt.Println(content)
+		fmt.Println("Depuración: Contenido obtenido ->", content)
 	}
-	if size != 0 && size > 0 {
-		// Create content
-		if StrlenBytes([]byte(content)) != 0 && StrlenBytes([]byte(content)) < size {
-			// fmt.Println("entra aqui a ver lo del content")
-			contador := 0
-			for i := StrlenBytes([]byte(content)); i < size; i++ {
-				if contador != 9 {
-					contador++
-				} else {
-					contador = 0
-				}
-				content += strconv.Itoa(contador)
 
-			}
-		} else {
-			contador := 0
-			for i := 0; i < size; i++ {
-				if contador != 9 {
-					contador++
-				} else {
-					contador = 0
-				}
-				content += strconv.Itoa(contador)
-			}
+	fmt.Println("Depuración: Preparando contenido con tamaño", size)
+
+	if size > 0 {
+		for i := len(content); i < size; i++ {
+			content += strconv.Itoa(i % 10)
 		}
-		// fmt.Println("Create content")
 	}
-	// fmt.Println("el content despues de agregarle numeros")
-	consola.AddToConsole("-------CONTENIDO DEL ARCHIVO-------\n")
-	consola.AddToConsole("\"" + content + "\"\n")
-	num := NewInodeFile(&superbloque, path, userId, groupdId, content)
+
+	fmt.Println("Depuración: Contenido final:", content)
+
+	num := NewInodeFile(&superbloque, path, userId, groupId, content)
+	fmt.Println("Depuración: Inodo asignado en posición", num)
+
 	FindDirectories(num, &tablaInodoRoot, path, ruta, &superbloque, 0)
 	comandos.Fwrite(&tablaInodoRoot, path, superbloque.S_inode_start)
 	comandos.Fwrite(&superbloque, path, whereToStart)
-	fmt.Println(" Depuración: Superbloque actualizado correctamente en disco.")
+	fmt.Println("Depuración: Superbloque actualizado correctamente.")
+
 	PrintTree(&tablaInodoRoot, &superbloque, path)
 	return true
 }
@@ -201,45 +256,55 @@ func GetUserId(contenido, name string) int64 {
 }
 
 func NewInodeFile(superbloque *datos.SuperBloque, path string, userId, groupId int64, contenido string) int64 {
-	var nuevaTabla datos.TablaInodo
-	nuevaPosicion := bitmap.WriteInBitmapInode(path, superbloque)
+    fmt.Println("Depuración: Creando nuevo inodo.")
 
-	if nuevaPosicion == -1 {
-		fmt.Println("❌ Error: No se pudo asignar un nuevo inodo.")
-		return -1
-	}
+    var nuevaTabla datos.TablaInodo
+    nuevaPosicion := bitmap.WriteInBitmapInode(path, superbloque)
 
-	fmt.Printf("Depuración: Creando archivo con inodo en posición %d\n", nuevaPosicion)
+    if nuevaPosicion == -1 {
+        fmt.Println("❌ ERROR: No se pudo asignar un nuevo inodo.")
+        return -1
+    }
 
-	// Aquí llenaremos la nueva tabla de inodos
-	nuevaTabla.I_uid = userId
-	nuevaTabla.I_gid = groupId
-	nuevaTabla.I_size = int64(StrlenBytes([]byte(contenido)))
-	nuevaTabla.I_type = '1'
-	nuevaTabla.I_perm = 664
+    // Mostrar la posición asignada del inodo
+    fmt.Println("Depuración: Inodo asignado en posición", nuevaPosicion)
 
-	// llenando las fechas
-	atime := time.Now()
-	copy(nuevaTabla.I_atime[:], atime.String())
-	ctime := time.Now()
-	copy(nuevaTabla.I_ctime[:], ctime.String())
-	mtime := time.Now()
-	copy(nuevaTabla.I_mtime[:], mtime.String())
+    // Asignar valores básicos al inodo
+    nuevaTabla.I_uid = userId
+    nuevaTabla.I_gid = groupId
+    nuevaTabla.I_size = int64(len(contenido))
+    nuevaTabla.I_type = '1'  // tipo archivo
+    nuevaTabla.I_perm = 664  // permisos: lectura y escritura para usuario y grupo, solo lectura para otros
 
-	// llenando a todos los bloques no utilizados
-	for i := 0; i < len(nuevaTabla.I_block); i++ {
-		nuevaTabla.I_block[i] = -1
-	}
+    // Inicializar bloques del inodo a -1
+    for i := 0; i < len(nuevaTabla.I_block); i++ {
+        nuevaTabla.I_block[i] = -1
+    }
 
-	// Escribir contenido en bloques
-	llenarTablaDeInodoDeArchivos(&nuevaTabla, superbloque, path, contenido)
+    // Imprimir el estado del inodo antes de asignar contenido
+    fmt.Println("Depuración: Inodo antes de asignar contenido:")
+    fmt.Printf("I_uid: %d\n", nuevaTabla.I_uid)
+    fmt.Printf("I_gid: %d\n", nuevaTabla.I_gid)
+    fmt.Printf("I_size: %d\n", nuevaTabla.I_size)
+    fmt.Printf("I_type: %d\n", nuevaTabla.I_type)
+    fmt.Printf("I_perm: %d\n", nuevaTabla.I_perm)
+    fmt.Printf("I_block: %+v\n", nuevaTabla.I_block)
 
-	// Escribiendo la tabla de inodos en disco
-	fmt.Printf(" Depuración: Escribiendo inodo en superbloque en posición %d\n", superbloque.S_inode_start+nuevaPosicion*superbloque.S_inode_size)
-	comandos.Fwrite(&nuevaTabla, path, superbloque.S_inode_start+nuevaPosicion*superbloque.S_inode_size)
+    // Asignar contenido a los bloques
+    fmt.Println("Depuración: Asignando contenido a los bloques.")
+    llenarTablaDeInodoDeArchivos(&nuevaTabla, superbloque, path, contenido)
 
-	return nuevaPosicion
+    // Verificar el estado de los bloques después de la asignación
+    fmt.Println("Depuración: Estado de los bloques después de llenar con contenido:")
+    fmt.Printf("I_block: %+v\n", nuevaTabla.I_block)
+
+    // Guardar el inodo en disco
+    fmt.Println("Depuración: Guardando inodo en posición", superbloque.S_inode_start+nuevaPosicion*superbloque.S_inode_size)
+    comandos.Fwrite(&nuevaTabla, path, superbloque.S_inode_start+nuevaPosicion*superbloque.S_inode_size)
+
+    return nuevaPosicion
 }
+
 
 
 func getContent(cont string) string {

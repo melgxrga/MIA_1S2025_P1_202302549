@@ -2,15 +2,15 @@ package usuariosygrupos
 
 import (
 	"fmt"
+	"github.com/melgxrga/proyecto1Archivos/commands"
+	"github.com/melgxrga/proyecto1Archivos/consola"
+	"github.com/melgxrga/proyecto1Archivos/list"
+	"github.com/melgxrga/proyecto1Archivos/structures"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"unsafe"
-	"regexp"
-	"github.com/melgxrga/proyecto1Archivos/commands"
-	"github.com/melgxrga/proyecto1Archivos/consola"
-	"github.com/melgxrga/proyecto1Archivos/structures"
-	"github.com/melgxrga/proyecto1Archivos/list"
 )
 
 type ParametrosRep struct {
@@ -127,10 +127,12 @@ func (r *Rep) Rep(name, path, id, ruta string) bool {
 		consola.AddToConsole(fmt.Sprintf("el id: %s, no pertenece a una de las particiones montadas\n", id))
 		return false
 	}
+	fmt.Println("Depuración: valor de ruta al principio = ", ruta)
 	if name == "file" && ruta == "" {
 		consola.AddToConsole("la ruta a buscar no puede estar vacia\n")
 		return false
 	}
+
 	path = strings.Split(path, ".")[0]
 	if name == "disk" {
 		// fmt.Println("disk")
@@ -213,7 +215,6 @@ func (r *Rep) ReporteMBR(path, id string) {
 		return
 	}
 }
-
 
 func (r *Rep) recorrerEBR(ruta string, whereToStart int64) string {
 	contenido := ""
@@ -326,8 +327,6 @@ func (r *Rep) ReporteDisk(path, id string) {
 		return
 	}
 }
-
-
 
 func (r *Rep) ContarParticiones(ruta string, whereToStart int64) int {
 	contador := 0

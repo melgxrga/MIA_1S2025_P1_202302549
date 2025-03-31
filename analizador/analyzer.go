@@ -81,6 +81,14 @@ func (a *Analyzer) Analyzer(input string) (interface{}, error) {
 		case "rmusr":
 			r := usuariosygrupos.Rmusr{}
 			r.Exe(params)
+		case "mkdir":
+			m := usuariosygrupos.Mkdir{}
+			m.Exe(params)
+		case "mkfile":
+			m := usuariosygrupos.Mkfile{}
+			m.Exe(params)
+		case "cat":
+			continue;
 			
 	
 

@@ -73,7 +73,16 @@ func (m *MountList) Mount(path string, digit int, part *datos.Partition, partL *
 	// deberia crear un m.PrintId o guardar en un singleton la consola
 	m.GetId(newNode)
 }
-
+// GetAllMountNodes devuelve todos los nodos de la lista de montajes
+func (m *MountList) GetAllMountNodes() []*MountNode {
+	var nodes []*MountNode
+	temp := m.First
+	for temp != nil {
+		nodes = append(nodes, temp)
+		temp = temp.Next
+	}
+	return nodes
+}
 func (m *MountList) UnMount(key_ string) *MountNode {
 	if !m.IsEmpty() {
 		temp := m.First
